@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://bumbasstic.pages.dev/sitemap.xml
+Sitemap: https://bumbasstic.heyitsallback.workers.dev/sitemap.xml
