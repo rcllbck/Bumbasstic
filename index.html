@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bumbasstic — Rate, Review & Discover Music</title>
+<meta name="description" content="Bumbasstic adalah platform untuk rating, review, dan diskusi album musik bersama komunitas. Temukan album trending, jelajahi genre, dan bagikan pendapatmu.">
+<meta name="keywords" content="rating album, review musik, discover music, album trending, komunitas musik">
+<link rel="canonical" href="https://bumbasstic.pages.dev/">
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://bumbasstic.pages.dev/">
+<meta property="og:title" content="Bumbasstic — Rate, Review & Discover Music">
+<meta property="og:description" content="Rating, review, dan diskusi album musik bersama komunitas. Temukan album trending dan jelajahi genre favoritmu.">
+<meta property="og:image" content="https://bumbasstic.pages.dev/hero-bg.jpg">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Bumbasstic — Rate, Review & Discover Music">
+<meta name="twitter:description" content="Rating, review, dan diskusi album musik bersama komunitas.">
+<meta name="twitter:image" content="https://bumbasstic.pages.dev/hero-bg.jpg">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="style.css">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Bumbasstic",
+  "url": "https://bumbasstic.pages.dev/",
+  "description": "Platform rating, review, dan discovery album musik.",
+  "applicationCategory": "MusicApplication"
+}
+</script>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<nav class="navbar">
+  <div class="logo">Bum<span>basstic</span></div>
+  <div class="nav-links">
+    <button class="nav-btn active" onclick="showPage('home')" id="nav-home"><i class="ti ti-home"></i> Home</button>
+    <button class="nav-btn" onclick="showPage('search')" id="nav-search"><i class="ti ti-search"></i> Search</button>
+    <button class="nav-btn" onclick="showPage('trending')" id="nav-trending"><i class="ti ti-trending-up"></i> Trending</button>
+    <button class="nav-btn" onclick="showPage('genres')" id="nav-genres"><i class="ti ti-layout-grid"></i> Genre</button>
+  </div>
+  <div class="avatar" onclick="showPage('profile')">AL</div>
+</nav>
+
+<!-- HOME -->
+<div class="page active" id="page-home">
+  <div class="hero">
+    <div class="hero-inner">
+      <h1>THESE ARE YOUR FAVORITES<br>YOU KNOW WHY</h1>
+      <p>Rating, review, and discuss music with community.</p>
+      <div class="hero-stats">
+        <div class="hero-stat"><span id="sTotalRating">—</span><span>rated album</span></div>
+        <div class="hero-stat"><span id="sTotalReview">—</span><span>review</span></div>
+        <div class="hero-stat"><span id="sTotalSaved">—</span><span>saved</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">popular album</span>
+    </div>
+    <div id="homeGrid"><div class="loader"><div class="spinner"></div> loading...</div></div>
+  </div>
+</div>
+
+<!-- SEARCH -->
+<div class="page" id="page-search">
+  <div class="search-bar-big">
+    <div class="search-input-wrap">
+      <i class="ti ti-search"></i>
+      <input type="text" id="searchInput" placeholder="type album/artist..." onkeydown="if(event.key==='Enter') doSearch()">
+    </div>
+    <button class="btn-primary" onclick="doSearch()">Cari</button>
+  </div>
+  <div class="section">
+    <div id="searchResults"><div class="empty"><i class="ti ti-vinyl"></i><p>type album or artist.</p></div></div>
+  </div>
+</div>
+
+<!-- TRENDING -->
+<div class="page" id="page-trending">
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">most rated</span>
+    </div>
+    <div class="trend-list" id="trendingList"><div class="loader"><div class="spinner"></div> load...</div></div>
+  </div>
+</div>
+
+<!-- GENRES -->
+<div class="page" id="page-genres">
+  <div class="genre-chips" id="genreChips"></div>
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title" id="genreTitle">explore genre</span>
+      <span style="font-size:12px;color:var(--text3);" id="genreCount"></span>
+    </div>
+    <div class="genre-grid" id="genreCards"></div>
+    <div class="album-grid" id="genreAlbums" style="display:none;"></div>
+    <div class="loader" id="genreLoader" style="display:none;"><div class="spinner"></div> load...</div>
+    <div class="empty" id="genreEmpty" style="display:none;"><i class="ti ti-music-off"></i><p>album doesn't exist.</p></div>
+  </div>
+</div>
+
+<!-- DETAIL -->
+<div class="page" id="page-detail">
+  <button class="back-btn" onclick="goBack()"><i class="ti ti-arrow-left"></i> back</button>
+  <div class="detail-hero">
+    <div class="detail-cover-wrap" id="dCover"></div>
+    <div class="detail-info">
+      <div class="detail-title" id="dTitle"></div>
+      <div class="detail-artist" id="dArtist"></div>
+      <div class="detail-pills" id="dMeta"></div>
+      <div class="rating-display">
+        <div class="big-num" id="dRating">—</div>
+        <div>
+          <div class="rating-stars" id="dStars"></div>
+          <div class="rating-sub" id="dRatingSub"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="action-bar">
+    <span class="label-sm">Your rate:</span>
+    <div class="star-row" id="starRow"></div>
+    <div class="spacer"></div>
+    <button class="btn-save" id="saveBtn" onclick="toggleSave()"><i class="ti ti-bookmark"></i><span id="saveText">simpan</span></button>
+  </div>
+  <div class="reviews-wrap">
+    <div class="section-header" style="margin-bottom:10px;"><span class="section-title">write review</span></div>
+    <div class="write-box">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div class="rev-av">AL</div>
+        <span style="font-size:13px;font-weight:600;">allback</span>
+      </div>
+      <textarea id="reviewTxt" rows="3" placeholder="Apa yang kamu rasakan dari album ini?"></textarea>
+      <div class="write-box-footer"><button class="btn-submit" id="submitBtn" onclick="submitReview()">Kirim Review</button></div>
+    </div>
+    <div class="section-header" style="margin-bottom:10px;margin-top:1.5rem;">
+      <span class="section-title">all review</span>
+    </div>
+    <div id="reviewsList"></div>
+  </div>
+</div>
+
+<!-- PROFILE -->
+<div class="page" id="page-profile">
+  <div class="profile-hero">
+    <div class="profile-top">
+      <div class="profile-av">AL</div>
+      <div>
+        <div class="profile-name">allback</div>
+        <div class="profile-bio">musik adalah bahasa universal 🎵</div>
+      </div>
+    </div>
+    <div class="profile-stats">
+      <div class="p-stat"><span id="myRated">—</span><span>rated</span></div>
+      <div class="p-stat"><span id="myReviewed">—</span><span>review</span></div>
+      <div class="p-stat"><span id="mySaved">—</span><span>saved</span></div>
+    </div>
+  </div>
+  <div class="section" id="profileFeed"><div class="loader"><div class="spinner"></div> load...</div></div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
