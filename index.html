@@ -47,6 +47,7 @@
     <button class="nav-btn" onclick="showPage('search')" id="nav-search"><i class="ti ti-search"></i> Search</button>
     <button class="nav-btn" onclick="showPage('trending')" id="nav-trending"><i class="ti ti-trending-up"></i> Trending</button>
     <button class="nav-btn" onclick="showPage('genres')" id="nav-genres"><i class="ti ti-layout-grid"></i> Genre</button>
+    <button class="nav-btn" onclick="showPage('friends')" id="nav-friends"><i class="ti ti-users"></i> Teman</button>
   </div>
   <div class="avatar" id="avatarBtn">AL</div>
 </nav>
@@ -108,6 +109,26 @@
     <div class="album-grid" id="genreAlbums" style="display:none;"></div>
     <div class="loader" id="genreLoader" style="display:none;"><div class="spinner"></div> load...</div>
     <div class="empty" id="genreEmpty" style="display:none;"><i class="ti ti-music-off"></i><p>album doesn't exist.</p></div>
+  </div>
+</div>
+
+<!-- FRIENDS -->
+<div class="page" id="page-friends">
+  <div class="search-bar-big">
+    <div class="search-input-wrap">
+      <i class="ti ti-search"></i>
+      <input type="text" id="friendSearchInput" placeholder="cari username..." onkeydown="if(event.key==='Enter') searchFriends()">
+    </div>
+    <button class="btn-primary" onclick="searchFriends()">Cari</button>
+  </div>
+  <div class="section">
+    <div id="friendSearchResults"></div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">aktivitas teman</span>
+    </div>
+    <div id="friendsFeed"><div class="loader"><div class="spinner"></div> load...</div></div>
   </div>
 </div>
 

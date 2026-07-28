@@ -188,7 +188,7 @@ async function mbSearch(q, limit = 12) {
 }
 
 // ── State ─────────────────────────────────────────────────────
-let myRatings = {}, mySaved = new Set(), myFavAlbums = new Set(), currentAlbum = null, prevPage = 'home';
+let myRatings = {}, mySaved = new Set(), myFavAlbums = new Set(), myFollowing = new Set(), currentAlbum = null, prevPage = 'home';
 
 function esc(s) {
   return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -418,6 +418,117 @@ function fmtDuration(ms) {
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ── FRIENDS (follow) ──────────────────────────────────────────
+async function loadMyFollowing() {
+  if (!USER_ID) return;
+  try {
+    const rows = await sb('follows', 'GET', null, `?follower_id=eq.${USER_ID}&select=following_id`);
+    myFollowing = new Set((rows || []).map(r => r.following_id));
+  } catch { /* ignore */ }
+}
+
+async function searchFriends() {
+  if (!requireLogin()) return;
+  const q = document.getElementById('friendSearchInput').value.trim();
+  if (!q) return;
+  const el = document.getElementById('friendSearchResults');
+  el.innerHTML = '<div class="loader"><div class="spinner"></div> mencari...</div>';
+  try {
+    const rows = await sb('profiles', 'GET', null,
+      `?username=ilike.*${encodeURIComponent(q)}*&select=user_id,username,avatar_url&limit=10`);
+    const results = (rows || []).filter(r => r.user_id !== USER_ID);
+    if (!results.length) {
+      el.innerHTML = '<div class="empty"><i class="ti ti-user-off"></i><p>User tidak ditemukan.</p></div>';
+      return;
+    }
+    el.innerHTML = results.map(r => {
+      const following = myFollowing.has(r.user_id);
+      return `
+      <div class="trend-item" style="cursor:default;">
+        <div class="trend-cover-ph">${avatarHtml(r.avatar_url, r.username)}</div>
+        <div class="trend-info">
+          <div class="trend-title">${r.username}</div>
+        </div>
+        <button class="btn-save${following ? ' saved' : ''}" onclick="toggleFollow('${esc(r.user_id)}', this)">
+          ${following ? 'Following' : 'Follow'}
+        </button>
+      </div>`;
+    }).join('');
+  } catch {
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal mencari.</p></div>';
+  }
+}
+
+async function toggleFollow(targetId, btn) {
+  if (!requireLogin()) return;
+  try {
+    if (myFollowing.has(targetId)) {
+      await sb('follows', 'DELETE', null, `?follower_id=eq.${USER_ID}&following_id=eq.${targetId}`);
+      myFollowing.delete(targetId);
+      if (btn) { btn.textContent = 'Follow'; btn.classList.remove('saved'); }
+      toast('Berhenti follow');
+    } else {
+      await sb('follows', 'POST', { follower_id: USER_ID, following_id: targetId });
+      myFollowing.add(targetId);
+      if (btn) { btn.textContent = 'Following'; btn.classList.add('saved'); }
+      toast('Berhasil follow ✓');
+    }
+  } catch {
+    toast('Gagal memperbarui follow');
+  }
+}
+
+async function loadFriendsFeed() {
+  const el = document.getElementById('friendsFeed');
+  if (!currentUser) {
+    el.innerHTML = '<div class="empty"><i class="ti ti-login"></i><p>Login dulu buat lihat aktivitas teman.</p></div>';
+    return;
+  }
+  el.innerHTML = '<div class="loader"><div class="spinner"></div> load...</div>';
+  await loadMyFollowing();
+  const ids = [...myFollowing];
+  if (!ids.length) {
+    el.innerHTML = '<div class="empty"><i class="ti ti-users"></i><p>Belum follow siapa-siapa. Cari username di atas dulu.</p></div>';
+    return;
+  }
+  try {
+    const idList = ids.join(',');
+    const [ratings, reviews, profiles] = await Promise.all([
+      sb('ratings', 'GET', null, `?user_id=in.(${idList})&order=created_at.desc&limit=30`),
+      sb('reviews', 'GET', null, `?user_id=in.(${idList})&order=created_at.desc&limit=30`),
+      sb('profiles', 'GET', null, `?user_id=in.(${idList})&select=user_id,username,avatar_url`)
+    ]);
+    const pMap = {};
+    (profiles || []).forEach(p => pMap[p.user_id] = p);
+
+    const items = [
+      ...(ratings || []).map(r => ({ ...r, kind: 'rating' })),
+      ...(reviews || []).map(r => ({ ...r, kind: 'review' }))
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 30);
+
+    if (!items.length) {
+      el.innerHTML = '<div class="empty"><i class="ti ti-mood-empty"></i><p>Teman kamu belum ada aktivitas.</p></div>';
+      return;
+    }
+    el.innerHTML = items.map(it => {
+      const p = pMap[it.user_id] || { username: 'user' };
+      const sub = it.kind === 'rating'
+        ? `Memberi rating ⭐ ${it.stars} untuk`
+        : `Menulis review untuk`;
+      return `
+      <div class="activity-item">
+        <div class="act-img">${coverEl(it.cover_url, '🎵', 'act-img')}</div>
+        <div class="act-body">
+          <div class="act-title"><b>${p.username}</b> ${sub} <i>${it.album_title}</i></div>
+          <div class="act-sub">${it.kind === 'review' ? esc(it.review_text).slice(0, 100) : ''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal memuat aktivitas.</p></div>';
+  }
 }
 
 async function loadTracklist(mbid) {
@@ -844,13 +955,14 @@ function showPage(name, skipNav) {
   }
   if (name === 'trending') loadTrending();
   if (name === 'profile')  loadProfile();
+  if (name === 'friends')  loadFriendsFeed();
 }
 
 // ── INIT ──────────────────────────────────────────────────────
 renderGenreChips('Semua');
 renderGenreCards();
 
-const VALID_PAGES = ['home', 'search', 'trending', 'genres', 'profile'];
+const VALID_PAGES = ['home', 'search', 'trending', 'genres', 'profile', 'friends'];
 
 (async function initApp() {
   await initAuth();
