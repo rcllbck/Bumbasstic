@@ -47,7 +47,7 @@
     <button class="nav-btn" onclick="showPage('trending')" id="nav-trending"><i class="ti ti-trending-up"></i> Trending</button>
     <button class="nav-btn" onclick="showPage('genres')" id="nav-genres"><i class="ti ti-layout-grid"></i> Genre</button>
   </div>
-  <div class="avatar" onclick="showPage('profile')">AL</div>
+  <div class="avatar" id="avatarBtn">AL</div>
 </nav>
 
 <!-- HOME -->
@@ -138,8 +138,8 @@
     <div class="section-header" style="margin-bottom:10px;"><span class="section-title">write review</span></div>
     <div class="write-box">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <div class="rev-av">AL</div>
-        <span style="font-size:13px;font-weight:600;">allback</span>
+        <div class="rev-av" id="writeAv">AL</div>
+        <span style="font-size:13px;font-weight:600;" id="writeName">—</span>
       </div>
       <textarea id="reviewTxt" rows="3" placeholder="Apa yang kamu rasakan dari album ini?"></textarea>
       <div class="write-box-footer"><button class="btn-submit" id="submitBtn" onclick="submitReview()">Kirim Review</button></div>
@@ -155,11 +155,12 @@
 <div class="page" id="page-profile">
   <div class="profile-hero">
     <div class="profile-top">
-      <div class="profile-av">AL</div>
-      <div>
-        <div class="profile-name">allback</div>
-        <div class="profile-bio">musik adalah bahasa universal 🎵</div>
+      <div class="profile-av" id="profileAv">AL</div>
+      <div style="flex:1;">
+        <div class="profile-name" id="profileName">—</div>
+        <div class="profile-bio" id="profileBio"></div>
       </div>
+      <button class="btn-save" onclick="logout()"><i class="ti ti-logout"></i> Logout</button>
     </div>
     <div class="profile-stats">
       <div class="p-stat"><span id="myRated">—</span><span>rated</span></div>
@@ -170,6 +171,7 @@
   <div class="section" id="profileFeed"><div class="loader"><div class="spinner"></div> load...</div></div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="script.js"></script>
 </body>
 </html>

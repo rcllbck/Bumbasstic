@@ -1,8 +1,61 @@
 const SB_URL = 'https://sqkhizjbmzujvjylovfk.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxa2hpempibXp1anZqeWxvdmZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDUxMDYsImV4cCI6MjA5NzA4MTEwNn0.N6uZ_wqumLz9UGs1wCK-EikWQSWMXIWYmISy-Mhulks';
-const USER_ID = 'allback';
 const MB = 'https://musicbrainz.org/ws/2';
 const CAA = 'https://coverartarchive.org/release';
+
+// ── Auth (Supabase Google login) ────────────────────────────────
+const sbClient = supabase.createClient(SB_URL, SB_KEY);
+let currentUser = null;
+let USER_ID = null;
+
+async function initAuth() {
+  const { data: { session } } = await sbClient.auth.getSession();
+  handleSession(session);
+  sbClient.auth.onAuthStateChange((_event, session) => handleSession(session));
+}
+
+function handleSession(session) {
+  currentUser = session?.user || null;
+  USER_ID = currentUser?.id || null;
+  updateAuthUI();
+}
+
+function updateAuthUI() {
+  const btn = document.getElementById('avatarBtn');
+  if (currentUser) {
+    const name = currentUser.user_metadata?.full_name || currentUser.email || 'User';
+    const pic = currentUser.user_metadata?.avatar_url;
+    btn.innerHTML = pic
+      ? `<img src="${pic}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+      : name.slice(0, 2).toUpperCase();
+    btn.onclick = () => showPage('profile');
+  } else {
+    btn.innerHTML = '<i class="ti ti-login"></i>';
+    btn.onclick = () => loginWithGoogle();
+  }
+}
+
+async function loginWithGoogle() {
+  await sbClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.href }
+  });
+}
+
+async function logout() {
+  await sbClient.auth.signOut();
+  toast('Berhasil logout');
+  showPage('home');
+}
+
+function requireLogin() {
+  if (!currentUser) {
+    toast('Login dulu buat rating, review, atau simpan album');
+    loginWithGoogle();
+    return false;
+  }
+  return true;
+}
 
 // ── Supabase helper ──────────────────────────────────────────
 async function sb(table, method = 'GET', body = null, qs = '') {
@@ -111,11 +164,13 @@ async function loadHome() {
     document.getElementById('sTotalReview').textContent = rv?.length || 0;
     document.getElementById('sTotalSaved').textContent = s?.length || 0;
 
-    const mine = await sb('ratings', 'GET', null, `?user_id=eq.${USER_ID}&select=mbid,stars`);
-    mine?.forEach(x => myRatings[x.mbid] = x.stars);
+    if (USER_ID) {
+      const mine = await sb('ratings', 'GET', null, `?user_id=eq.${USER_ID}&select=mbid,stars`);
+      mine?.forEach(x => myRatings[x.mbid] = x.stars);
 
-    const saved = await sb('saved_albums', 'GET', null, `?user_id=eq.${USER_ID}&select=mbid`);
-    saved?.forEach(x => mySaved.add(x.mbid));
+      const saved = await sb('saved_albums', 'GET', null, `?user_id=eq.${USER_ID}&select=mbid`);
+      saved?.forEach(x => mySaved.add(x.mbid));
+    }
   } catch (e) {
     // silently fail — DB errors don't surface to user
   }
@@ -334,12 +389,13 @@ function resetS(mbid) {
 }
 
 async function doRate(mbid, stars) {
+  if (!requireLogin()) return;
   myRatings[mbid] = stars;
   resetS(mbid);
   const a = currentAlbum;
   try {
     await sb('ratings', 'POST',
-      { user_id: USER_ID, mbid, stars, album_title: a.title, artist: a.artist, cover_url: a.coverUrl || null },
+      { user_id: USER_ID, user_name: currentUser.user_metadata?.full_name || currentUser.email, mbid, stars, album_title: a.title, artist: a.artist, cover_url: a.coverUrl || null },
       '?on_conflict=user_id,mbid'
     );
     toast(`⭐ Rating ${stars} bintang tersimpan`);
@@ -357,6 +413,7 @@ async function doRate(mbid, stars) {
 
 async function toggleSave() {
   if (!currentAlbum) return;
+  if (!requireLogin()) return;
   const { mbid, title, artist, coverUrl } = currentAlbum;
   try {
     if (mySaved.has(mbid)) {
@@ -367,7 +424,7 @@ async function toggleSave() {
       toast('Dihapus dari simpanan');
     } else {
       await sb('saved_albums', 'POST',
-        { user_id: USER_ID, mbid, album_title: title, artist, cover_url: coverUrl || null },
+        { user_id: USER_ID, user_name: currentUser.user_metadata?.full_name || currentUser.email, mbid, album_title: title, artist, cover_url: coverUrl || null },
         '?on_conflict=user_id,mbid'
       );
       mySaved.add(mbid);
@@ -389,9 +446,9 @@ function renderReviews(list) {
   el.innerHTML = list.map(r => `
     <div class="review-card">
       <div class="review-top">
-        <div class="rev-av">${(r.user_id || '?').slice(0, 2).toUpperCase()}</div>
+        <div class="rev-av">${(r.user_name || r.user_id || '?').slice(0, 2).toUpperCase()}</div>
         <div>
-          <div class="rev-name">${r.user_id}</div>
+          <div class="rev-name">${r.user_name || r.user_id}</div>
           <div class="rev-date">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
         </div>
         ${r.stars ? `<div class="rev-stars">${'★'.repeat(r.stars)}</div>` : ''}
@@ -403,12 +460,14 @@ function renderReviews(list) {
 async function submitReview() {
   const txt = document.getElementById('reviewTxt').value.trim();
   if (!txt || !currentAlbum) return;
+  if (!requireLogin()) return;
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
   btn.textContent = 'Menyimpan...';
   try {
     await sb('reviews', 'POST', {
       user_id: USER_ID,
+      user_name: currentUser.user_metadata?.full_name || currentUser.email,
       mbid: currentAlbum.mbid,
       review_text: txt,
       stars: myRatings[currentAlbum.mbid] || 0,
@@ -428,6 +487,29 @@ async function submitReview() {
 
 // ── PROFILE ───────────────────────────────────────────────────
 async function loadProfile() {
+  if (!currentUser) {
+    document.getElementById('profileFeed').innerHTML =
+      '<div class="empty"><i class="ti ti-login"></i><p>Login dulu buat lihat profil kamu.</p><button class="btn-primary" style="margin-top:10px;" onclick="loginWithGoogle()">Login with Google</button></div>';
+    document.getElementById('profileName').textContent = 'Belum login';
+    document.getElementById('profileBio').textContent = '';
+    document.getElementById('myRated').textContent = '—';
+    document.getElementById('myReviewed').textContent = '—';
+    document.getElementById('mySaved').textContent = '—';
+    return;
+  }
+
+  const name = currentUser.user_metadata?.full_name || currentUser.email;
+  const pic = currentUser.user_metadata?.avatar_url;
+  document.getElementById('profileName').textContent = name;
+  document.getElementById('profileBio').textContent = currentUser.email;
+  document.getElementById('profileAv').innerHTML = pic
+    ? `<img src="${pic}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    : name.slice(0, 2).toUpperCase();
+  document.getElementById('writeAv').innerHTML = pic
+    ? `<img src="${pic}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    : name.slice(0, 2).toUpperCase();
+  document.getElementById('writeName').textContent = name;
+
   try {
     const [ratings, reviews, saved] = await Promise.all([
       sb('ratings', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc`),
@@ -485,4 +567,5 @@ function showPage(name, skipNav) {
 // ── INIT ──────────────────────────────────────────────────────
 renderGenreChips('Semua');
 renderGenreCards();
+initAuth();
 loadHome();
