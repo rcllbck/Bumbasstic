@@ -21,6 +21,9 @@ async function handleSession(session) {
   myProfile = null;
   if (currentUser) await ensureProfile();
   updateAuthUI();
+  const active = document.querySelector('.page.active');
+  if (active?.id === 'page-profile') loadProfile();
+  if (active?.id === 'page-home') loadHome();
 }
 
 function slugUsername(base) {
@@ -846,11 +849,14 @@ function showPage(name, skipNav) {
 // ── INIT ──────────────────────────────────────────────────────
 renderGenreChips('Semua');
 renderGenreCards();
-initAuth();
-loadHome();
 
 const VALID_PAGES = ['home', 'search', 'trending', 'genres', 'profile'];
-const startHash = location.hash.replace('#', '');
-if (VALID_PAGES.includes(startHash) && startHash !== 'home') {
-  showPage(startHash);
-}
+
+(async function initApp() {
+  await initAuth();
+  loadHome();
+  const startHash = location.hash.replace('#', '');
+  if (VALID_PAGES.includes(startHash) && startHash !== 'home') {
+    showPage(startHash);
+  }
+})();
