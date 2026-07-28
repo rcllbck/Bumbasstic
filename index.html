@@ -133,6 +133,7 @@
     <span class="label-sm">Your rate:</span>
     <div class="star-row" id="starRow"></div>
     <div class="spacer"></div>
+    <button class="btn-save" id="favBtn" onclick="toggleFavAlbum()"><i class="ti ti-heart"></i><span id="favText">favorit</span></button>
     <button class="btn-save" id="saveBtn" onclick="toggleSave()"><i class="ti ti-bookmark"></i><span id="saveText">simpan</span></button>
   </div>
   <div class="reviews-wrap">
@@ -156,11 +157,12 @@
 <div class="page" id="page-profile">
   <div class="profile-hero">
     <div class="profile-top">
-      <div class="profile-av" id="profileAv">AL</div>
-      <div style="flex:1;">
+      <div class="profile-av" id="profileAv" onclick="toggleEditProfile()" style="cursor:pointer;">AL</div>
+      <div style="flex:1;cursor:pointer;" onclick="toggleEditProfile()">
         <div class="profile-name" id="profileName">—</div>
         <div class="profile-bio" id="profileBio"></div>
       </div>
+      <button class="btn-save" onclick="toggleEditProfile()"><i class="ti ti-pencil"></i> Edit</button>
       <button class="btn-save" onclick="logout()"><i class="ti ti-logout"></i> Logout</button>
     </div>
     <div class="profile-stats">
@@ -168,7 +170,7 @@
       <div class="p-stat"><span id="myReviewed">—</span><span>review</span></div>
       <div class="p-stat"><span id="mySaved">—</span><span>saved</span></div>
     </div>
-    <div class="write-box" style="margin-top:1.25rem;">
+    <div class="write-box" id="editProfileBox" style="margin-top:1.25rem;display:none;">
       <div class="section-title" style="margin-bottom:10px;">Edit Profil</div>
       <div style="margin-bottom:10px;">
         <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Username</label>
@@ -182,6 +184,27 @@
         <button class="btn-submit" id="saveProfileBtn" onclick="saveProfileEdits()">Simpan Profil</button>
       </div>
     </div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Album Favorit</span>
+      <span style="font-size:11px;color:var(--text3);">maks 6</span>
+    </div>
+    <div id="favAlbumsGrid"><div class="empty"><i class="ti ti-heart"></i><p>Belum ada album favorit. Buka detail album, lalu tekan tombol favorit.</p></div></div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Artis Favorit</span>
+    </div>
+    <div class="search-bar-big" style="padding:0 0 12px;background:none;border:none;">
+      <div class="search-input-wrap">
+        <i class="ti ti-search"></i>
+        <input type="text" id="favArtistInput" placeholder="cari nama artis..." onkeydown="if(event.key==='Enter') searchFavArtist()">
+      </div>
+      <button class="btn-primary" onclick="searchFavArtist()">Cari</button>
+    </div>
+    <div id="favArtistResults"></div>
+    <div id="favArtistChips" class="genre-chips" style="padding:10px 0;background:none;border:none;flex-wrap:wrap;"></div>
   </div>
   <div class="section" id="profileFeed"><div class="loader"><div class="spinner"></div> load...</div></div>
 </div>

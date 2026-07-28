@@ -84,6 +84,11 @@ function requireLogin() {
   return true;
 }
 
+function toggleEditProfile() {
+  const box = document.getElementById('editProfileBox');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
 async function saveProfileEdits() {
   const usernameInput = document.getElementById('editUsername');
   const fileInput = document.getElementById('editAvatarFile');
@@ -180,7 +185,7 @@ async function mbSearch(q, limit = 12) {
 }
 
 // ── State ─────────────────────────────────────────────────────
-let myRatings = {}, mySaved = new Set(), currentAlbum = null, prevPage = 'home';
+let myRatings = {}, mySaved = new Set(), myFavAlbums = new Set(), currentAlbum = null, prevPage = 'home';
 
 function esc(s) {
   return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -244,6 +249,9 @@ async function loadHome() {
 
       const saved = await sb('saved_albums', 'GET', null, `?user_id=eq.${USER_ID}&select=mbid`);
       saved?.forEach(x => mySaved.add(x.mbid));
+
+      const favs = await sb('favorite_albums', 'GET', null, `?user_id=eq.${USER_ID}&select=mbid`);
+      favs?.forEach(x => myFavAlbums.add(x.mbid));
     }
   } catch (e) {
     // silently fail — DB errors don't surface to user
@@ -423,6 +431,10 @@ async function openDetail(mbid, title, artist, year, coverUrl) {
   document.getElementById('saveBtn').className = 'btn-save' + (saved ? ' saved' : '');
   document.getElementById('saveText').textContent = saved ? 'tersimpan' : 'simpan';
 
+  const isFav = myFavAlbums.has(mbid);
+  document.getElementById('favBtn').className = 'btn-save' + (isFav ? ' saved' : '');
+  document.getElementById('favText').textContent = isFav ? 'favorit ♥' : 'favorit';
+
   showPage('detail', true);
 
   // Build star picker
@@ -482,6 +494,135 @@ async function doRate(mbid, stars) {
     }
   } catch {
     toast('Gagal menyimpan rating');
+  }
+}
+
+async function toggleFavAlbum() {
+  if (!currentAlbum) return;
+  if (!requireLogin()) return;
+  const { mbid, title, artist, coverUrl } = currentAlbum;
+  try {
+    if (myFavAlbums.has(mbid)) {
+      await sb('favorite_albums', 'DELETE', null, `?user_id=eq.${USER_ID}&mbid=eq.${mbid}`);
+      myFavAlbums.delete(mbid);
+      document.getElementById('favBtn').className = 'btn-save';
+      document.getElementById('favText').textContent = 'favorit';
+      toast('Dihapus dari favorit');
+    } else {
+      if (myFavAlbums.size >= 6) {
+        toast('Maksimal 6 album favorit. Hapus salah satu dulu.');
+        return;
+      }
+      await sb('favorite_albums', 'POST',
+        { user_id: USER_ID, mbid, album_title: title, artist, cover_url: coverUrl || null },
+        '?on_conflict=user_id,mbid'
+      );
+      myFavAlbums.add(mbid);
+      document.getElementById('favBtn').className = 'btn-save saved';
+      document.getElementById('favText').textContent = 'favorit ♥';
+      toast('Ditambahkan ke favorit ✓');
+    }
+  } catch {
+    toast('Gagal menyimpan favorit');
+  }
+}
+
+// ── FAVORITE ARTISTS ──────────────────────────────────────────
+async function mbArtistSearch(q, limit = 8) {
+  const r = await fetch(
+    `${MB}/artist/?query=${encodeURIComponent(q)}&limit=${limit}&fmt=json`,
+    { headers: { 'Accept': 'application/json', 'User-Agent': 'Albumly/1.0' } }
+  );
+  const d = await r.json();
+  return (d.artists || []).map(a => ({ mbid: a.id, name: a.name, country: a.country || '' }));
+}
+
+async function searchFavArtist() {
+  if (!requireLogin()) return;
+  const q = document.getElementById('favArtistInput').value.trim();
+  if (!q) return;
+  const el = document.getElementById('favArtistResults');
+  el.innerHTML = '<div class="loader"><div class="spinner"></div> mencari...</div>';
+  try {
+    const artists = await mbArtistSearch(q);
+    if (!artists.length) {
+      el.innerHTML = '<div class="empty"><i class="ti ti-user-off"></i><p>Artis tidak ditemukan.</p></div>';
+      return;
+    }
+    el.innerHTML = artists.map(a => `
+      <div class="trend-item" onclick="addFavArtist('${esc(a.mbid)}','${esc(a.name)}')">
+        <div class="trend-cover-ph">🎤</div>
+        <div class="trend-info">
+          <div class="trend-title">${a.name}</div>
+          <div class="trend-artist">${a.country || ''}</div>
+        </div>
+      </div>`).join('');
+  } catch {
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal mencari.</p></div>';
+  }
+}
+
+async function addFavArtist(mbid, name) {
+  try {
+    await sb('favorite_artists', 'POST',
+      { user_id: USER_ID, artist_mbid: mbid, artist_name: name },
+      '?on_conflict=user_id,artist_name'
+    );
+    document.getElementById('favArtistResults').innerHTML = '';
+    document.getElementById('favArtistInput').value = '';
+    toast(`${name} ditambahkan ke artis favorit ✓`);
+    await renderFavArtists();
+  } catch {
+    toast('Gagal menambahkan artis');
+  }
+}
+
+async function removeFavArtist(name) {
+  try {
+    await sb('favorite_artists', 'DELETE', null, `?user_id=eq.${USER_ID}&artist_name=eq.${encodeURIComponent(name)}`);
+    toast(`${name} dihapus dari favorit`);
+    await renderFavArtists();
+  } catch {
+    toast('Gagal menghapus artis');
+  }
+}
+
+async function renderFavArtists() {
+  const el = document.getElementById('favArtistChips');
+  if (!el) return;
+  try {
+    const rows = await sb('favorite_artists', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc`);
+    if (!rows?.length) {
+      el.innerHTML = '<span style="font-size:12px;color:var(--text3);">Belum ada artis favorit.</span>';
+      return;
+    }
+    el.innerHTML = rows.map(r => `
+      <button class="genre-chip active" onclick="removeFavArtist('${esc(r.artist_name)}')">${r.artist_name} ✕</button>
+    `).join('');
+  } catch {
+    el.innerHTML = '';
+  }
+}
+
+async function renderFavAlbums() {
+  const el = document.getElementById('favAlbumsGrid');
+  if (!el) return;
+  try {
+    const rows = await sb('favorite_albums', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc`);
+    if (!rows?.length) {
+      el.innerHTML = '<div class="empty"><i class="ti ti-heart"></i><p>Belum ada album favorit. Buka detail album, lalu tekan tombol favorit.</p></div>';
+      return;
+    }
+    el.innerHTML = `<div class="album-grid">${rows.map(a => `
+      <div class="album-card" onclick="openDetail('${esc(a.mbid)}','${esc(a.album_title)}','${esc(a.artist)}','—','${esc(a.cover_url || '')}')">
+        ${coverEl(a.cover_url, '🎵', 'album-cover')}
+        <div class="album-info">
+          <div class="album-title">${a.album_title}</div>
+          <div class="album-artist">${a.artist}</div>
+        </div>
+      </div>`).join('')}</div>`;
+  } catch {
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal memuat.</p></div>';
   }
 }
 
@@ -585,6 +726,8 @@ async function loadProfile() {
   }
 
   renderProfileInfo();
+  renderFavAlbums();
+  renderFavArtists();
 
   try {
     const [ratings, reviews, saved] = await Promise.all([
