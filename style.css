@@ -612,6 +612,40 @@ body {
   border-color: var(--accent);
 }
 
+/* ── TRACKLIST ── */
+.track-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.track-item:last-child {
+  border-bottom: none;
+}
+
+.track-num {
+  color: var(--text3);
+  font-size: 12px;
+  min-width: 20px;
+}
+
+.track-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-dur {
+  color: var(--text3);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 /* ── REVIEWS ── */
 .reviews-wrap {
   padding: 1.5rem;

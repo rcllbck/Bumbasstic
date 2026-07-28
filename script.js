@@ -409,6 +409,60 @@ async function filterGenre(genre) {
   }
 }
 
+function fmtDuration(ms) {
+  if (!ms) return '—';
+  const totalSec = Math.round(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+async function loadTracklist(mbid) {
+  const el = document.getElementById('dTracklist');
+  try {
+    const r = await fetch(`${MB}/release/${mbid}?inc=recordings+labels+artist-credits+genres&fmt=json`, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Albumly/1.0' }
+    });
+    const d = await r.json();
+
+    // ── Extra metadata pills ──
+    const pills = [];
+    if (d.date) pills.push(d.date);
+    if (d.country) pills.push(d.country);
+    (d['label-info'] || []).forEach(li => {
+      const label = li.label?.name;
+      const cat = li['catalog-number'];
+      if (label) pills.push(cat ? `${label} · ${cat}` : label);
+    });
+    (d.genres || []).slice(0, 4).forEach(g => pills.push(`#${g.name}`));
+    const dMeta = document.getElementById('dMeta');
+    if (pills.length) {
+      dMeta.innerHTML = pills.map(p => `<span class="pill">${p}</span>`).join('');
+    }
+
+    // ── Full artist credit (featuring, etc) ──
+    const credit = (d['artist-credit'] || [])
+      .map(c => (c.name || c.artist?.name || '') + (c.joinphrase || ''))
+      .join('');
+    if (credit) document.getElementById('dArtist').textContent = credit;
+
+    // ── Tracklist ──
+    const tracks = d.media?.flatMap(m => m.tracks || []) || [];
+    if (!tracks.length) {
+      el.innerHTML = '<div class="empty"><i class="ti ti-playlist-x"></i><p>Tracklist tidak tersedia.</p></div>';
+      return;
+    }
+    el.innerHTML = tracks.map(t => `
+      <div class="track-item">
+        <span class="track-num">${t.number || t.position}</span>
+        <span class="track-title">${t.title}</span>
+        <span class="track-dur">${fmtDuration(t.length)}</span>
+      </div>`).join('');
+  } catch {
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal memuat tracklist.</p></div>';
+  }
+}
+
 // ── DETAIL ────────────────────────────────────────────────────
 async function openDetail(mbid, title, artist, year, coverUrl) {
   const cur = document.querySelector('.page.active');
@@ -426,6 +480,9 @@ async function openDetail(mbid, title, artist, year, coverUrl) {
   document.getElementById('dRatingSub').textContent = 'memuat...';
   document.getElementById('reviewsList').innerHTML =
     '<div class="loader"><div class="spinner"></div> memuat review...</div>';
+  document.getElementById('dTracklist').innerHTML =
+    '<div class="loader"><div class="spinner"></div> memuat tracklist...</div>';
+  loadTracklist(mbid);
 
   const saved = mySaved.has(mbid);
   document.getElementById('saveBtn').className = 'btn-save' + (saved ? ' saved' : '');
@@ -779,6 +836,9 @@ function showPage(name, skipNav) {
     const btn = document.getElementById('nav-' + name);
     if (btn) btn.classList.add('active');
   }
+  if (name !== 'detail') {
+    history.replaceState(null, '', '#' + name);
+  }
   if (name === 'trending') loadTrending();
   if (name === 'profile')  loadProfile();
 }
@@ -788,3 +848,9 @@ renderGenreChips('Semua');
 renderGenreCards();
 initAuth();
 loadHome();
+
+const VALID_PAGES = ['home', 'search', 'trending', 'genres', 'profile'];
+const startHash = location.hash.replace('#', '');
+if (VALID_PAGES.includes(startHash) && startHash !== 'home') {
+  showPage(startHash);
+}
