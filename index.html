@@ -168,6 +168,20 @@
       <div class="p-stat"><span id="myReviewed">—</span><span>review</span></div>
       <div class="p-stat"><span id="mySaved">—</span><span>saved</span></div>
     </div>
+    <div class="write-box" style="margin-top:1.25rem;">
+      <div class="section-title" style="margin-bottom:10px;">Edit Profil</div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Username</label>
+        <input type="text" id="editUsername" placeholder="username kamu" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;outline:none;">
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Foto Profil</label>
+        <input type="file" id="editAvatarFile" accept="image/*" style="font-size:12px;color:var(--text2);">
+      </div>
+      <div class="write-box-footer">
+        <button class="btn-submit" id="saveProfileBtn" onclick="saveProfileEdits()">Simpan Profil</button>
+      </div>
+    </div>
   </div>
   <div class="section" id="profileFeed"><div class="loader"><div class="spinner"></div> load...</div></div>
 </div>

@@ -7,27 +7,54 @@ const CAA = 'https://coverartarchive.org/release';
 const sbClient = supabase.createClient(SB_URL, SB_KEY);
 let currentUser = null;
 let USER_ID = null;
+let myProfile = null;
 
 async function initAuth() {
   const { data: { session } } = await sbClient.auth.getSession();
-  handleSession(session);
+  await handleSession(session);
   sbClient.auth.onAuthStateChange((_event, session) => handleSession(session));
 }
 
-function handleSession(session) {
+async function handleSession(session) {
   currentUser = session?.user || null;
   USER_ID = currentUser?.id || null;
+  myProfile = null;
+  if (currentUser) await ensureProfile();
   updateAuthUI();
+}
+
+function slugUsername(base) {
+  const clean = (base || 'user').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return (clean || 'user').slice(0, 16) + Math.floor(Math.random() * 9000 + 1000);
+}
+
+async function ensureProfile() {
+  try {
+    const rows = await sb('profiles', 'GET', null, `?user_id=eq.${USER_ID}&select=*`);
+    if (rows?.length) {
+      myProfile = rows[0];
+      return;
+    }
+    const defaultName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'user';
+    const created = await sb('profiles', 'POST',
+      { user_id: USER_ID, username: slugUsername(defaultName), avatar_url: currentUser.user_metadata?.avatar_url || null }
+    );
+    myProfile = created?.[0] || null;
+  } catch {
+    myProfile = { user_id: USER_ID, username: 'user', avatar_url: null };
+  }
+}
+
+function avatarHtml(url, initials) {
+  return url
+    ? `<img src="${url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    : (initials || '?').slice(0, 2).toUpperCase();
 }
 
 function updateAuthUI() {
   const btn = document.getElementById('avatarBtn');
-  if (currentUser) {
-    const name = currentUser.user_metadata?.full_name || currentUser.email || 'User';
-    const pic = currentUser.user_metadata?.avatar_url;
-    btn.innerHTML = pic
-      ? `<img src="${pic}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
-      : name.slice(0, 2).toUpperCase();
+  if (currentUser && myProfile) {
+    btn.innerHTML = avatarHtml(myProfile.avatar_url, myProfile.username);
     btn.onclick = () => showPage('profile');
   } else {
     btn.innerHTML = '<i class="ti ti-login"></i>';
@@ -57,11 +84,58 @@ function requireLogin() {
   return true;
 }
 
+async function saveProfileEdits() {
+  const usernameInput = document.getElementById('editUsername');
+  const fileInput = document.getElementById('editAvatarFile');
+  const btn = document.getElementById('saveProfileBtn');
+  const newUsername = usernameInput.value.trim();
+  if (!newUsername) { toast('Username tidak boleh kosong'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Menyimpan...';
+  try {
+    let avatarUrl = myProfile.avatar_url;
+    const file = fileInput.files[0];
+    if (file) {
+      const ext = file.name.split('.').pop();
+      const path = `${USER_ID}/avatar.${ext}`;
+      const upRes = await fetch(`${SB_URL}/storage/v1/object/avatars/${path}?upsert=true`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${(await sbClient.auth.getSession()).data.session.access_token}`,
+          'Content-Type': file.type
+        },
+        body: file
+      });
+      if (!upRes.ok) throw new Error('upload failed');
+      avatarUrl = `${SB_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
+    }
+    const updated = await sb('profiles', 'PATCH',
+      { username: newUsername, avatar_url: avatarUrl },
+      `?user_id=eq.${USER_ID}`
+    );
+    myProfile = updated?.[0] || { ...myProfile, username: newUsername, avatar_url: avatarUrl };
+    updateAuthUI();
+    renderProfileInfo();
+    toast('Profil berhasil diperbarui ✓');
+  } catch {
+    toast('Gagal menyimpan profil');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Simpan Profil';
+}
+
 // ── Supabase helper ──────────────────────────────────────────
 async function sb(table, method = 'GET', body = null, qs = '') {
+  let token = SB_KEY;
+  try {
+    const { data: { session } } = await sbClient.auth.getSession();
+    if (session?.access_token) token = session.access_token;
+  } catch { /* fall back to anon key */ }
+
   const headers = {
     'apikey': SB_KEY,
-    'Authorization': `Bearer ${SB_KEY}`,
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
     'Prefer': method === 'POST'
       ? 'return=representation,resolution=merge-duplicates'
@@ -395,7 +469,7 @@ async function doRate(mbid, stars) {
   const a = currentAlbum;
   try {
     await sb('ratings', 'POST',
-      { user_id: USER_ID, user_name: currentUser.user_metadata?.full_name || currentUser.email, mbid, stars, album_title: a.title, artist: a.artist, cover_url: a.coverUrl || null },
+      { user_id: USER_ID, user_name: myProfile.username, mbid, stars, album_title: a.title, artist: a.artist, cover_url: a.coverUrl || null },
       '?on_conflict=user_id,mbid'
     );
     toast(`⭐ Rating ${stars} bintang tersimpan`);
@@ -424,7 +498,7 @@ async function toggleSave() {
       toast('Dihapus dari simpanan');
     } else {
       await sb('saved_albums', 'POST',
-        { user_id: USER_ID, user_name: currentUser.user_metadata?.full_name || currentUser.email, mbid, album_title: title, artist, cover_url: coverUrl || null },
+        { user_id: USER_ID, user_name: myProfile.username, mbid, album_title: title, artist, cover_url: coverUrl || null },
         '?on_conflict=user_id,mbid'
       );
       mySaved.add(mbid);
@@ -467,7 +541,7 @@ async function submitReview() {
   try {
     await sb('reviews', 'POST', {
       user_id: USER_ID,
-      user_name: currentUser.user_metadata?.full_name || currentUser.email,
+      user_name: myProfile.username,
       mbid: currentAlbum.mbid,
       review_text: txt,
       stars: myRatings[currentAlbum.mbid] || 0,
@@ -486,6 +560,18 @@ async function submitReview() {
 }
 
 // ── PROFILE ───────────────────────────────────────────────────
+function renderProfileInfo() {
+  const pic = myProfile?.avatar_url;
+  const name = myProfile?.username || '—';
+  document.getElementById('profileName').textContent = name;
+  document.getElementById('profileBio').textContent = '';
+  document.getElementById('profileAv').innerHTML = avatarHtml(pic, name);
+  document.getElementById('writeAv').innerHTML = avatarHtml(pic, name);
+  document.getElementById('writeName').textContent = name;
+  const editInput = document.getElementById('editUsername');
+  if (editInput) editInput.value = name;
+}
+
 async function loadProfile() {
   if (!currentUser) {
     document.getElementById('profileFeed').innerHTML =
@@ -498,17 +584,7 @@ async function loadProfile() {
     return;
   }
 
-  const name = currentUser.user_metadata?.full_name || currentUser.email;
-  const pic = currentUser.user_metadata?.avatar_url;
-  document.getElementById('profileName').textContent = name;
-  document.getElementById('profileBio').textContent = currentUser.email;
-  document.getElementById('profileAv').innerHTML = pic
-    ? `<img src="${pic}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
-    : name.slice(0, 2).toUpperCase();
-  document.getElementById('writeAv').innerHTML = pic
-    ? `<img src="${pic}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
-    : name.slice(0, 2).toUpperCase();
-  document.getElementById('writeName').textContent = name;
+  renderProfileInfo();
 
   try {
     const [ratings, reviews, saved] = await Promise.all([
