@@ -1,24 +1,24 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bumbasstic — Rate, Review & Discover Music</title>
-<meta name="description" content="Bumbasstic adalah platform untuk rating, review, dan diskusi album musik bersama komunitas. Temukan album trending, jelajahi genre, dan bagikan pendapatmu.">
-<meta name="keywords" content="rating album, review musik, discover music, album trending, komunitas musik">
+<meta name="description" content="Bumbasstic is a platform to rate, review, and discuss music albums with a community. Discover trending albums, explore genres, and share your opinions.">
+<meta name="keywords" content="album rating, music review, discover music, trending albums, music community">
 <link rel="canonical" href="https://bumbasstic.heyitsallback.workers.dev/">
 
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://bumbasstic.heyitsallback.workers.dev/">
 <meta property="og:title" content="Bumbasstic — Rate, Review & Discover Music">
-<meta property="og:description" content="Rating, review, dan diskusi album musik bersama komunitas. Temukan album trending dan jelajahi genre favoritmu.">
+<meta property="og:description" content="Rate, review, and discuss music albums with a community. Discover trending albums and explore your favorite genres.">
 <meta property="og:image" content="https://bumbasstic.heyitsallback.workers.dev/hero-bg.jpg">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Bumbasstic — Rate, Review & Discover Music">
-<meta name="twitter:description" content="Rating, review, dan diskusi album musik bersama komunitas.">
+<meta name="twitter:description" content="Rate, review, and discuss music albums with a community.">
 <meta name="twitter:image" content="https://bumbasstic.heyitsallback.workers.dev/hero-bg.jpg">
 
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -31,7 +31,7 @@
   "@type": "WebApplication",
   "name": "Bumbasstic",
   "url": "https://bumbasstic.heyitsallback.workers.dev/",
-  "description": "Platform rating, review, dan discovery album musik.",
+  "description": "A platform to rate, review, and discover music albums.",
   "applicationCategory": "MusicApplication"
 }
 </script>
@@ -47,7 +47,7 @@
     <button class="nav-btn" onclick="showPage('search')" id="nav-search"><i class="ti ti-search"></i> Search</button>
     <button class="nav-btn" onclick="showPage('trending')" id="nav-trending"><i class="ti ti-trending-up"></i> Trending</button>
     <button class="nav-btn" onclick="showPage('genres')" id="nav-genres"><i class="ti ti-layout-grid"></i> Genre</button>
-    <button class="nav-btn" onclick="showPage('friends')" id="nav-friends"><i class="ti ti-users"></i> Teman</button>
+    <button class="nav-btn" onclick="showPage('friends')" id="nav-friends"><i class="ti ti-users"></i> Friends</button>
   </div>
   <div class="avatar" id="avatarBtn">AL</div>
 </nav>
@@ -80,7 +80,7 @@
       <i class="ti ti-search"></i>
       <input type="text" id="searchInput" placeholder="type album/artist..." onkeydown="if(event.key==='Enter') doSearch()">
     </div>
-    <button class="btn-primary" onclick="doSearch()">Cari</button>
+    <button class="btn-primary" onclick="doSearch()">Search</button>
   </div>
   <div class="section">
     <div id="searchResults"><div class="empty"><i class="ti ti-vinyl"></i><p>type album or artist.</p></div></div>
@@ -117,16 +117,16 @@
   <div class="search-bar-big">
     <div class="search-input-wrap">
       <i class="ti ti-search"></i>
-      <input type="text" id="friendSearchInput" placeholder="cari username..." onkeydown="if(event.key==='Enter') searchFriends()">
+      <input type="text" id="friendSearchInput" placeholder="search username..." onkeydown="if(event.key==='Enter') searchFriends()">
     </div>
-    <button class="btn-primary" onclick="searchFriends()">Cari</button>
+    <button class="btn-primary" onclick="searchFriends()">Search</button>
   </div>
   <div class="section">
     <div id="friendSearchResults"></div>
   </div>
   <div class="section">
     <div class="section-header">
-      <span class="section-title">aktivitas teman</span>
+      <span class="section-title">friends activity</span>
     </div>
     <div id="friendsFeed"><div class="loader"><div class="spinner"></div> load...</div></div>
   </div>
@@ -154,14 +154,14 @@
     <span class="label-sm">Your rate:</span>
     <div class="star-row" id="starRow"></div>
     <div class="spacer"></div>
-    <button class="btn-save" id="favBtn" onclick="toggleFavAlbum()"><i class="ti ti-heart"></i><span id="favText">favorit</span></button>
-    <button class="btn-save" id="saveBtn" onclick="toggleSave()"><i class="ti ti-bookmark"></i><span id="saveText">simpan</span></button>
+    <button class="btn-save" id="favBtn" onclick="toggleFavAlbum()"><i class="ti ti-heart"></i><span id="favText">favorite</span></button>
+    <button class="btn-save" id="saveBtn" onclick="toggleSave()"><i class="ti ti-bookmark"></i><span id="saveText">save</span></button>
   </div>
   <div class="section" style="padding-top:1rem;">
     <div class="section-header">
       <span class="section-title">tracklist</span>
     </div>
-    <div id="dTracklist"><div class="loader"><div class="spinner"></div> memuat tracklist...</div></div>
+    <div id="dTracklist"><div class="loader"><div class="spinner"></div> loading tracklist...</div></div>
   </div>
   <div class="reviews-wrap">
     <div class="section-header" style="margin-bottom:10px;"><span class="section-title">write review</span></div>
@@ -170,8 +170,8 @@
         <div class="rev-av" id="writeAv">AL</div>
         <span style="font-size:13px;font-weight:600;" id="writeName">—</span>
       </div>
-      <textarea id="reviewTxt" rows="3" placeholder="Apa yang kamu rasakan dari album ini?"></textarea>
-      <div class="write-box-footer"><button class="btn-submit" id="submitBtn" onclick="submitReview()">Kirim Review</button></div>
+      <textarea id="reviewTxt" rows="3" placeholder="What do you think about this album?"></textarea>
+      <div class="write-box-footer"><button class="btn-submit" id="submitBtn" onclick="submitReview()">Submit Review</button></div>
     </div>
     <div class="section-header" style="margin-bottom:10px;margin-top:1.5rem;">
       <span class="section-title">all review</span>
@@ -198,37 +198,37 @@
       <div class="p-stat"><span id="mySaved">—</span><span>saved</span></div>
     </div>
     <div class="write-box" id="editProfileBox" style="margin-top:1.25rem;display:none;">
-      <div class="section-title" style="margin-bottom:10px;">Edit Profil</div>
+      <div class="section-title" style="margin-bottom:10px;">Edit Profile</div>
       <div style="margin-bottom:10px;">
         <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Username</label>
-        <input type="text" id="editUsername" placeholder="username kamu" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;outline:none;">
+        <input type="text" id="editUsername" placeholder="your username" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;outline:none;">
       </div>
       <div style="margin-bottom:10px;">
-        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Foto Profil</label>
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Profile Photo</label>
         <input type="file" id="editAvatarFile" accept="image/*" style="font-size:12px;color:var(--text2);">
       </div>
       <div class="write-box-footer">
-        <button class="btn-submit" id="saveProfileBtn" onclick="saveProfileEdits()">Simpan Profil</button>
+        <button class="btn-submit" id="saveProfileBtn" onclick="saveProfileEdits()">Save Profile</button>
       </div>
     </div>
   </div>
   <div class="section">
     <div class="section-header">
-      <span class="section-title">Album Favorit</span>
-      <span style="font-size:11px;color:var(--text3);">maks 6</span>
+      <span class="section-title">Favorite Albums</span>
+      <span style="font-size:11px;color:var(--text3);">max 6</span>
     </div>
-    <div id="favAlbumsGrid"><div class="empty"><i class="ti ti-heart"></i><p>Belum ada album favorit. Buka detail album, lalu tekan tombol favorit.</p></div></div>
+    <div id="favAlbumsGrid"><div class="empty"><i class="ti ti-heart"></i><p>No favorite albums yet. Open an album detail page and tap the favorite button.</p></div></div>
   </div>
   <div class="section">
     <div class="section-header">
-      <span class="section-title">Artis Favorit</span>
+      <span class="section-title">Favorite Artists</span>
     </div>
     <div class="search-bar-big" style="padding:0 0 12px;background:none;border:none;">
       <div class="search-input-wrap">
         <i class="ti ti-search"></i>
-        <input type="text" id="favArtistInput" placeholder="cari nama artis..." onkeydown="if(event.key==='Enter') searchFavArtist()">
+        <input type="text" id="favArtistInput" placeholder="search artist name..." onkeydown="if(event.key==='Enter') searchFavArtist()">
       </div>
-      <button class="btn-primary" onclick="searchFavArtist()">Cari</button>
+      <button class="btn-primary" onclick="searchFavArtist()">Search</button>
     </div>
     <div id="favArtistResults"></div>
     <div id="favArtistChips" class="genre-chips" style="padding:10px 0;background:none;border:none;flex-wrap:wrap;"></div>

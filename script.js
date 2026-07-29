@@ -21,6 +21,9 @@ async function handleSession(session) {
   myProfile = null;
   if (currentUser) await ensureProfile();
   updateAuthUI();
+  if (location.hash.includes('access_token')) {
+    history.replaceState(null, '', window.location.pathname);
+  }
   const active = document.querySelector('.page.active');
   if (active?.id === 'page-profile') loadProfile();
   if (active?.id === 'page-home') loadHome();
@@ -66,21 +69,22 @@ function updateAuthUI() {
 }
 
 async function loginWithGoogle() {
+  const cleanUrl = window.location.origin + window.location.pathname;
   await sbClient.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.href }
+    options: { redirectTo: cleanUrl }
   });
 }
 
 async function logout() {
   await sbClient.auth.signOut();
-  toast('Berhasil logout');
+  toast('Successfully logged out');
   showPage('home');
 }
 
 function requireLogin() {
   if (!currentUser) {
-    toast('Login dulu buat rating, review, atau simpan album');
+    toast('Log in first to rate, review, or save an album');
     loginWithGoogle();
     return false;
   }
@@ -125,12 +129,12 @@ async function saveProfileEdits() {
     myProfile = updated?.[0] || { ...myProfile, username: newUsername, avatar_url: avatarUrl };
     updateAuthUI();
     renderProfileInfo();
-    toast('Profil berhasil diperbarui ✓');
+    toast('Profile updated successfully ✓');
   } catch {
-    toast('Gagal menyimpan profil');
+    toast('Failed to save profile');
   }
   btn.disabled = false;
-  btn.textContent = 'Simpan Profil';
+  btn.textContent = 'Save Profile';
 }
 
 // ── Supabase helper ──────────────────────────────────────────
@@ -216,7 +220,7 @@ async function renderGrid(containerId, albums) {
     el.innerHTML = '<div class="empty"><i class="ti ti-music-off"></i><p>tidak ada hasil.</p></div>';
     return;
   }
-  el.innerHTML = '<div class="loader"><div class="spinner"></div> memuat cover...</div>';
+  el.innerHTML = '<div class="loader"><div class="spinner"></div> loading cover...</div>';
   const list = await Promise.all(
     albums.map(async a => ({ ...a, cover: a.cover || await getCover(a.mbid) }))
   );
@@ -265,7 +269,7 @@ async function loadHome() {
     await renderGrid('homeGrid', albums);
   } catch {
     document.getElementById('homeGrid').innerHTML =
-      '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal memuat. Pastikan koneksi internet aktif.</p></div>';
+      '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load. Make sure your internet connection is active.</p></div>';
   }
 }
 
@@ -274,7 +278,7 @@ async function doSearch() {
   const q = document.getElementById('searchInput').value.trim();
   if (!q) return;
   const el = document.getElementById('searchResults');
-  el.innerHTML = '<div class="loader"><div class="spinner"></div> mencari...</div>';
+  el.innerHTML = '<div class="loader"><div class="spinner"></div> searching...</div>';
   try {
     const albums = await mbSearch(q, 16);
     if (!albums.length) {
@@ -283,14 +287,14 @@ async function doSearch() {
     }
     await renderGrid('searchResults', albums);
   } catch {
-    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal mencari.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Search failed.</p></div>';
   }
 }
 
 // ── TRENDING ──────────────────────────────────────────────────
 async function loadTrending() {
   const el = document.getElementById('trendingList');
-  el.innerHTML = '<div class="loader"><div class="spinner"></div> memuat dari database...</div>';
+  el.innerHTML = '<div class="loader"><div class="spinner"></div> loading from database...</div>';
   try {
     const rows = await sb('ratings', 'GET', null,
       '?select=mbid,album_title,artist,cover_url,stars&order=created_at.desc&limit=50');
@@ -327,7 +331,7 @@ async function loadTrending() {
         </div>
       </div>`).join('');
   } catch {
-    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal memuat.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load.</p></div>';
   }
 }
 
@@ -434,13 +438,13 @@ async function searchFriends() {
   const q = document.getElementById('friendSearchInput').value.trim();
   if (!q) return;
   const el = document.getElementById('friendSearchResults');
-  el.innerHTML = '<div class="loader"><div class="spinner"></div> mencari...</div>';
+  el.innerHTML = '<div class="loader"><div class="spinner"></div> searching...</div>';
   try {
     const rows = await sb('profiles', 'GET', null,
       `?username=ilike.*${encodeURIComponent(q)}*&select=user_id,username,avatar_url&limit=10`);
     const results = (rows || []).filter(r => r.user_id !== USER_ID);
     if (!results.length) {
-      el.innerHTML = '<div class="empty"><i class="ti ti-user-off"></i><p>User tidak ditemukan.</p></div>';
+      el.innerHTML = '<div class="empty"><i class="ti ti-user-off"></i><p>User not found.</p></div>';
       return;
     }
     el.innerHTML = results.map(r => {
@@ -457,7 +461,7 @@ async function searchFriends() {
       </div>`;
     }).join('');
   } catch {
-    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal mencari.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Search failed.</p></div>';
   }
 }
 
@@ -473,24 +477,24 @@ async function toggleFollow(targetId, btn) {
       await sb('follows', 'POST', { follower_id: USER_ID, following_id: targetId });
       myFollowing.add(targetId);
       if (btn) { btn.textContent = 'Following'; btn.classList.add('saved'); }
-      toast('Berhasil follow ✓');
+      toast('Followed successfully ✓');
     }
   } catch {
-    toast('Gagal memperbarui follow');
+    toast('Failed to update follow status');
   }
 }
 
 async function loadFriendsFeed() {
   const el = document.getElementById('friendsFeed');
   if (!currentUser) {
-    el.innerHTML = '<div class="empty"><i class="ti ti-login"></i><p>Login dulu buat lihat aktivitas teman.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-login"></i><p>Log in first to see friends' activity.</p></div>';
     return;
   }
   el.innerHTML = '<div class="loader"><div class="spinner"></div> load...</div>';
   await loadMyFollowing();
   const ids = [...myFollowing];
   if (!ids.length) {
-    el.innerHTML = '<div class="empty"><i class="ti ti-users"></i><p>Belum follow siapa-siapa. Cari username di atas dulu.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-users"></i><p>Not following anyone yet. Search a username above.</p></div>';
     return;
   }
   try {
@@ -509,14 +513,14 @@ async function loadFriendsFeed() {
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 30);
 
     if (!items.length) {
-      el.innerHTML = '<div class="empty"><i class="ti ti-mood-empty"></i><p>Teman kamu belum ada aktivitas.</p></div>';
+      el.innerHTML = '<div class="empty"><i class="ti ti-mood-empty"></i><p>Your friends have no activity yet.</p></div>';
       return;
     }
     el.innerHTML = items.map(it => {
       const p = pMap[it.user_id] || { username: 'user' };
       const sub = it.kind === 'rating'
-        ? `Memberi rating ⭐ ${it.stars} untuk`
-        : `Menulis review untuk`;
+        ? `Rated ⭐ ${it.stars} for`
+        : `Wrote a review for`;
       return `
       <div class="activity-item">
         <div class="act-img">${coverEl(it.cover_url, '🎵', 'act-img')}</div>
@@ -527,7 +531,7 @@ async function loadFriendsFeed() {
       </div>`;
     }).join('');
   } catch {
-    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal memuat aktivitas.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load activity.</p></div>';
   }
 }
 
@@ -563,7 +567,7 @@ async function loadTracklist(mbid) {
     // ── Tracklist ──
     const tracks = d.media?.flatMap(m => m.tracks || []) || [];
     if (!tracks.length) {
-      el.innerHTML = '<div class="empty"><i class="ti ti-playlist-x"></i><p>Tracklist tidak tersedia.</p></div>';
+      el.innerHTML = '<div class="empty"><i class="ti ti-playlist-x"></i><p>Tracklist not available.</p></div>';
       return;
     }
     el.innerHTML = tracks.map(t => `
@@ -573,7 +577,7 @@ async function loadTracklist(mbid) {
         <span class="track-dur">${fmtDuration(t.length)}</span>
       </div>`).join('');
   } catch {
-    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal memuat tracklist.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load tracklist.</p></div>';
   }
 }
 
@@ -591,20 +595,20 @@ async function openDetail(mbid, title, artist, year, coverUrl) {
   document.getElementById('dMeta').innerHTML = `<span class="pill">${year}</span>`;
   document.getElementById('dRating').textContent = '—';
   document.getElementById('dStars').textContent = '';
-  document.getElementById('dRatingSub').textContent = 'memuat...';
+  document.getElementById('dRatingSub').textContent = 'loading...';
   document.getElementById('reviewsList').innerHTML =
-    '<div class="loader"><div class="spinner"></div> memuat review...</div>';
+    '<div class="loader"><div class="spinner"></div> loading reviews...</div>';
   document.getElementById('dTracklist').innerHTML =
-    '<div class="loader"><div class="spinner"></div> memuat tracklist...</div>';
+    '<div class="loader"><div class="spinner"></div> loading tracklist...</div>';
   loadTracklist(mbid);
 
   const saved = mySaved.has(mbid);
   document.getElementById('saveBtn').className = 'btn-save' + (saved ? ' saved' : '');
-  document.getElementById('saveText').textContent = saved ? 'tersimpan' : 'simpan';
+  document.getElementById('saveText').textContent = saved ? 'saved' : 'save';
 
   const isFav = myFavAlbums.has(mbid);
   document.getElementById('favBtn').className = 'btn-save' + (isFav ? ' saved' : '');
-  document.getElementById('favText').textContent = isFav ? 'favorit ♥' : 'favorit';
+  document.getElementById('favText').textContent = isFav ? 'favorite ♥' : 'favorite';
 
   showPage('detail', true);
 
@@ -625,11 +629,11 @@ async function openDetail(mbid, title, artist, year, coverUrl) {
     const avg = (ratingRows.reduce((s, r) => s + r.stars, 0) / ratingRows.length).toFixed(1);
     document.getElementById('dRating').textContent = avg;
     document.getElementById('dStars').textContent = starsStr(Math.round(avg));
-    document.getElementById('dRatingSub').textContent = `rata-rata dari ${ratingRows.length} rating`;
+    document.getElementById('dRatingSub').textContent = `average of ${ratingRows.length} ratings`;
   } else {
     document.getElementById('dRating').textContent = '—';
     document.getElementById('dStars').textContent = '';
-    document.getElementById('dRatingSub').textContent = 'belum ada rating';
+    document.getElementById('dRatingSub').textContent = 'no ratings yet';
   }
 
   renderReviews(reviewRows || []);
@@ -655,16 +659,16 @@ async function doRate(mbid, stars) {
       { user_id: USER_ID, user_name: myProfile.username, mbid, stars, album_title: a.title, artist: a.artist, cover_url: a.coverUrl || null },
       '?on_conflict=user_id,mbid'
     );
-    toast(`⭐ Rating ${stars} bintang tersimpan`);
+    toast(`⭐ Rating of ${stars} stars saved`);
     const rows = await sb('ratings', 'GET', null, `?mbid=eq.${mbid}&select=stars`);
     if (rows?.length) {
       const avg = (rows.reduce((s, r) => s + r.stars, 0) / rows.length).toFixed(1);
       document.getElementById('dRating').textContent = avg;
       document.getElementById('dStars').textContent = starsStr(Math.round(avg));
-      document.getElementById('dRatingSub').textContent = `rata-rata dari ${rows.length} rating`;
+      document.getElementById('dRatingSub').textContent = `average of ${rows.length} ratings`;
     }
   } catch {
-    toast('Gagal menyimpan rating');
+    toast('Failed to save rating');
   }
 }
 
@@ -677,11 +681,11 @@ async function toggleFavAlbum() {
       await sb('favorite_albums', 'DELETE', null, `?user_id=eq.${USER_ID}&mbid=eq.${mbid}`);
       myFavAlbums.delete(mbid);
       document.getElementById('favBtn').className = 'btn-save';
-      document.getElementById('favText').textContent = 'favorit';
-      toast('Dihapus dari favorit');
+      document.getElementById('favText').textContent = 'favorite';
+      toast('Removed from favorites');
     } else {
       if (myFavAlbums.size >= 6) {
-        toast('Maksimal 6 album favorit. Hapus salah satu dulu.');
+        toast('Maximum of 6 favorite albums. Remove one first.');
         return;
       }
       await sb('favorite_albums', 'POST',
@@ -690,11 +694,11 @@ async function toggleFavAlbum() {
       );
       myFavAlbums.add(mbid);
       document.getElementById('favBtn').className = 'btn-save saved';
-      document.getElementById('favText').textContent = 'favorit ♥';
-      toast('Ditambahkan ke favorit ✓');
+      document.getElementById('favText').textContent = 'favorite ♥';
+      toast('Added to favorites ✓');
     }
   } catch {
-    toast('Gagal menyimpan favorit');
+    toast('Failed to save favorite');
   }
 }
 
@@ -713,11 +717,11 @@ async function searchFavArtist() {
   const q = document.getElementById('favArtistInput').value.trim();
   if (!q) return;
   const el = document.getElementById('favArtistResults');
-  el.innerHTML = '<div class="loader"><div class="spinner"></div> mencari...</div>';
+  el.innerHTML = '<div class="loader"><div class="spinner"></div> searching...</div>';
   try {
     const artists = await mbArtistSearch(q);
     if (!artists.length) {
-      el.innerHTML = '<div class="empty"><i class="ti ti-user-off"></i><p>Artis tidak ditemukan.</p></div>';
+      el.innerHTML = '<div class="empty"><i class="ti ti-user-off"></i><p>Artist not found.</p></div>';
       return;
     }
     el.innerHTML = artists.map(a => `
@@ -729,7 +733,7 @@ async function searchFavArtist() {
         </div>
       </div>`).join('');
   } catch {
-    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal mencari.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Search failed.</p></div>';
   }
 }
 
@@ -741,20 +745,20 @@ async function addFavArtist(mbid, name) {
     );
     document.getElementById('favArtistResults').innerHTML = '';
     document.getElementById('favArtistInput').value = '';
-    toast(`${name} ditambahkan ke artis favorit ✓`);
+    toast(`${name} added to favorite artists ✓`);
     await renderFavArtists();
   } catch {
-    toast('Gagal menambahkan artis');
+    toast('Failed to add artist');
   }
 }
 
 async function removeFavArtist(name) {
   try {
     await sb('favorite_artists', 'DELETE', null, `?user_id=eq.${USER_ID}&artist_name=eq.${encodeURIComponent(name)}`);
-    toast(`${name} dihapus dari favorit`);
+    toast(`${name} removed from favorites`);
     await renderFavArtists();
   } catch {
-    toast('Gagal menghapus artis');
+    toast('Failed to remove artist');
   }
 }
 
@@ -764,7 +768,7 @@ async function renderFavArtists() {
   try {
     const rows = await sb('favorite_artists', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc`);
     if (!rows?.length) {
-      el.innerHTML = '<span style="font-size:12px;color:var(--text3);">Belum ada artis favorit.</span>';
+      el.innerHTML = '<span style="font-size:12px;color:var(--text3);">No favorite artists yet.</span>';
       return;
     }
     el.innerHTML = rows.map(r => `
@@ -781,7 +785,7 @@ async function renderFavAlbums() {
   try {
     const rows = await sb('favorite_albums', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc`);
     if (!rows?.length) {
-      el.innerHTML = '<div class="empty"><i class="ti ti-heart"></i><p>Belum ada album favorit. Buka detail album, lalu tekan tombol favorit.</p></div>';
+      el.innerHTML = '<div class="empty"><i class="ti ti-heart"></i><p>No favorite albums yet. Open an album detail page and tap the favorite button.</p></div>';
       return;
     }
     el.innerHTML = `<div class="album-grid">${rows.map(a => `
@@ -793,7 +797,7 @@ async function renderFavAlbums() {
         </div>
       </div>`).join('')}</div>`;
   } catch {
-    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal memuat.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load.</p></div>';
   }
 }
 
@@ -806,8 +810,8 @@ async function toggleSave() {
       await sb('saved_albums', 'DELETE', null, `?user_id=eq.${USER_ID}&mbid=eq.${mbid}`);
       mySaved.delete(mbid);
       document.getElementById('saveBtn').className = 'btn-save';
-      document.getElementById('saveText').textContent = 'simpan';
-      toast('Dihapus dari simpanan');
+      document.getElementById('saveText').textContent = 'save';
+      toast('Removed from saved');
     } else {
       await sb('saved_albums', 'POST',
         { user_id: USER_ID, user_name: myProfile.username, mbid, album_title: title, artist, cover_url: coverUrl || null },
@@ -815,18 +819,18 @@ async function toggleSave() {
       );
       mySaved.add(mbid);
       document.getElementById('saveBtn').className = 'btn-save saved';
-      document.getElementById('saveText').textContent = 'tersimpan';
-      toast('Album disimpan ✓');
+      document.getElementById('saveText').textContent = 'saved';
+      toast('Album saved ✓');
     }
   } catch {
-    toast('Gagal menyimpan');
+    toast('Failed to save');
   }
 }
 
 function renderReviews(list) {
   const el = document.getElementById('reviewsList');
   if (!list.length) {
-    el.innerHTML = '<div class="empty"><i class="ti ti-message-circle"></i><p>Belum ada review. Jadilah yang pertama!</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-message-circle"></i><p>No reviews yet. Be the first!</p></div>';
     return;
   }
   el.innerHTML = list.map(r => `
@@ -861,11 +865,11 @@ async function submitReview() {
       artist: currentAlbum.artist
     });
     document.getElementById('reviewTxt').value = '';
-    toast('Review tersimpan ✓');
+    toast('Review submitted ✓');
     const rows = await sb('reviews', 'GET', null, `?mbid=eq.${currentAlbum.mbid}&order=created_at.desc`);
     renderReviews(rows || []);
   } catch {
-    toast('Gagal menyimpan review');
+    toast('Failed to submit review');
   }
   btn.disabled = false;
   btn.textContent = 'Kirim Review';
@@ -887,8 +891,8 @@ function renderProfileInfo() {
 async function loadProfile() {
   if (!currentUser) {
     document.getElementById('profileFeed').innerHTML =
-      '<div class="empty"><i class="ti ti-login"></i><p>Login dulu buat lihat profil kamu.</p><button class="btn-primary" style="margin-top:10px;" onclick="loginWithGoogle()">Login with Google</button></div>';
-    document.getElementById('profileName').textContent = 'Belum login';
+      '<div class="empty"><i class="ti ti-login"></i><p>Log in first to see your profile.</p><button class="btn-primary" style="margin-top:10px;" onclick="loginWithGoogle()">Login with Google</button></div>';
+    document.getElementById('profileName').textContent = 'Not logged in';
     document.getElementById('profileBio').textContent = '';
     document.getElementById('myRated').textContent = '—';
     document.getElementById('myReviewed').textContent = '—';
@@ -911,18 +915,18 @@ async function loadProfile() {
     document.getElementById('mySaved').textContent    = saved?.length   || 0;
 
     const activities = [
-      ...(ratings || []).map(r => ({ cover: r.cover_url,  title: r.album_title, sub: `Rating ⭐ ${r.stars} bintang`,          date: r.created_at })),
+      ...(ratings || []).map(r => ({ cover: r.cover_url,  title: r.album_title, sub: `Rating ⭐ ${r.stars} stars`,          date: r.created_at })),
       ...(reviews || []).map(r => ({ cover: null,          title: r.album_title, sub: r.review_text.slice(0, 70) + (r.review_text.length > 70 ? '...' : ''), date: r.created_at })),
-      ...(saved   || []).map(r => ({ cover: r.cover_url,  title: r.album_title, sub: 'Disimpan ke koleksi',                   date: r.created_at })),
+      ...(saved   || []).map(r => ({ cover: r.cover_url,  title: r.album_title, sub: 'Saved to collection',                   date: r.created_at })),
     ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20);
 
     const el = document.getElementById('profileFeed');
     if (!activities.length) {
-      el.innerHTML = '<div class="empty"><i class="ti ti-history"></i><p>Belum ada aktivitas.</p></div>';
+      el.innerHTML = '<div class="empty"><i class="ti ti-history"></i><p>No activity yet.</p></div>';
       return;
     }
     el.innerHTML =
-      `<div class="section-header" style="margin-bottom:12px;"><span class="section-title">aktivitas terbaru</span></div>` +
+      `<div class="section-header" style="margin-bottom:12px;"><span class="section-title">recent activity</span></div>` +
       activities.map(a => `
         <div class="activity-item">
           ${a.cover
@@ -935,7 +939,7 @@ async function loadProfile() {
         </div>`).join('');
   } catch {
     document.getElementById('profileFeed').innerHTML =
-      '<div class="empty"><i class="ti ti-wifi-off"></i><p>Gagal memuat profil.</p></div>';
+      '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load profile.</p></div>';
   }
 }
 
