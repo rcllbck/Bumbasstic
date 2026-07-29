@@ -72,7 +72,10 @@ async function loginWithGoogle() {
   const cleanUrl = window.location.origin + window.location.pathname;
   await sbClient.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: cleanUrl }
+    options: {
+      redirectTo: cleanUrl,
+      queryParams: { prompt: 'select_account' }
+    }
   });
 }
 
