@@ -268,8 +268,20 @@ async function loadHome() {
   }
 
   try {
-    const albums = await mbSearch('Kendrick Lamar', 8);
-    await renderGrid('homeGrid', albums);
+    const rows = await sb('ratings', 'GET', null, '?select=mbid,album_title,artist,cover_url');
+    const map = {};
+    (rows || []).forEach(r => {
+      if (!map[r.mbid]) map[r.mbid] = { mbid: r.mbid, title: r.album_title, artist: r.artist, cover: r.cover_url, count: 0 };
+      map[r.mbid].count++;
+    });
+    const popular = Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8);
+
+    if (popular.length >= 4) {
+      await renderGrid('homeGrid', popular);
+    } else {
+      const albums = await mbSearch('Kendrick Lamar', 8);
+      await renderGrid('homeGrid', albums);
+    }
   } catch {
     document.getElementById('homeGrid').innerHTML =
       '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load. Make sure your internet connection is active.</p></div>';
@@ -277,15 +289,40 @@ async function loadHome() {
 }
 
 // ── SEARCH ────────────────────────────────────────────────────
-async function doSearch() {
-  const q = document.getElementById('searchInput').value.trim();
+async function doSearch(overrideQuery) {
+  const input = document.getElementById('searchInput');
+  const q = overrideQuery || input.value.trim();
   if (!q) return;
+  if (overrideQuery) input.value = overrideQuery;
+
   const el = document.getElementById('searchResults');
+  const artistWrap = document.getElementById('searchArtistsWrap');
+  const artistEl = document.getElementById('searchArtists');
   el.innerHTML = '<div class="loader"><div class="spinner"></div> searching...</div>';
+  artistWrap.style.display = 'none';
+
   try {
-    const albums = await mbSearch(q, 16);
+    const [albums, artists] = await Promise.all([
+      mbSearch(q, 16),
+      mbArtistSearch(q, 6)
+    ]);
+
+    if (artists.length) {
+      artistWrap.style.display = 'block';
+      artistEl.innerHTML = artists.map(a => `
+        <div class="trend-item" onclick="doSearch('${esc(a.name)}')">
+          <div class="trend-cover-ph">🎤</div>
+          <div class="trend-info">
+            <div class="trend-title">${a.name}</div>
+            <div class="trend-artist">${a.country || 'Artist'}</div>
+          </div>
+        </div>`).join('');
+    } else {
+      artistWrap.style.display = 'none';
+    }
+
     if (!albums.length) {
-      el.innerHTML = `<div class="empty"><i class="ti ti-search-off"></i><p>Tidak ada hasil untuk "${q}".</p></div>`;
+      el.innerHTML = `<div class="empty"><i class="ti ti-search-off"></i><p>No results for "${q}".</p></div>`;
       return;
     }
     await renderGrid('searchResults', albums);
@@ -525,7 +562,7 @@ async function loadFriendsFeed() {
         ? `Rated ⭐ ${it.stars} for`
         : `Wrote a review for`;
       return `
-      <div class="activity-item">
+      <div class="activity-item" style="cursor:pointer;" onclick="openDetail('${esc(it.mbid)}','${esc(it.album_title)}','${esc(it.artist)}','—','${esc(it.cover_url || '')}')">
         <div class="act-img">${coverEl(it.cover_url, '🎵', 'act-img')}</div>
         <div class="act-body">
           <div class="act-title"><b>${p.username}</b> ${sub} <i>${it.album_title}</i></div>
@@ -900,6 +937,8 @@ async function loadProfile() {
     document.getElementById('myRated').textContent = '—';
     document.getElementById('myReviewed').textContent = '—';
     document.getElementById('mySaved').textContent = '—';
+    document.getElementById('myFollowing').textContent = '—';
+    document.getElementById('myFollowers').textContent = '—';
     return;
   }
 
@@ -908,14 +947,18 @@ async function loadProfile() {
   renderFavArtists();
 
   try {
-    const [ratings, reviews, saved] = await Promise.all([
+    const [ratings, reviews, saved, following, followers] = await Promise.all([
       sb('ratings', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc`),
       sb('reviews', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc`),
-      sb('saved_albums', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc`)
+      sb('saved_albums', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc`),
+      sb('follows', 'GET', null, `?follower_id=eq.${USER_ID}&select=following_id`),
+      sb('follows', 'GET', null, `?following_id=eq.${USER_ID}&select=follower_id`)
     ]);
     document.getElementById('myRated').textContent    = ratings?.length || 0;
     document.getElementById('myReviewed').textContent = reviews?.length || 0;
     document.getElementById('mySaved').textContent    = saved?.length   || 0;
+    document.getElementById('myFollowing').textContent = following?.length || 0;
+    document.getElementById('myFollowers').textContent = followers?.length || 0;
 
     const activities = [
       ...(ratings || []).map(r => ({ cover: r.cover_url,  title: r.album_title, sub: `Rating ⭐ ${r.stars} stars`,          date: r.created_at })),

@@ -41,7 +41,7 @@
 <div class="toast" id="toast"></div>
 
 <nav class="navbar">
-  <div class="logo">Bum<span>basstic</span></div>
+  <div class="logo" onclick="showPage('home')" style="cursor:pointer;">Bum<span>basstic</span></div>
   <div class="nav-links">
     <button class="nav-btn active" onclick="showPage('home')" id="nav-home"><i class="ti ti-home"></i> Home</button>
     <button class="nav-btn" onclick="showPage('search')" id="nav-search"><i class="ti ti-search"></i> Search</button>
@@ -83,6 +83,15 @@
     <button class="btn-primary" onclick="doSearch()">Search</button>
   </div>
   <div class="section">
+    <div id="searchArtistsWrap" style="display:none;margin-bottom:1.5rem;">
+      <div class="section-header">
+        <span class="section-title">artists</span>
+      </div>
+      <div id="searchArtists"></div>
+    </div>
+    <div class="section-header">
+      <span class="section-title">albums</span>
+    </div>
     <div id="searchResults"><div class="empty"><i class="ti ti-vinyl"></i><p>type album or artist.</p></div></div>
   </div>
 </div>
@@ -196,6 +205,8 @@
       <div class="p-stat"><span id="myRated">—</span><span>rated</span></div>
       <div class="p-stat"><span id="myReviewed">—</span><span>review</span></div>
       <div class="p-stat"><span id="mySaved">—</span><span>saved</span></div>
+      <div class="p-stat"><span id="myFollowing">—</span><span>following</span></div>
+      <div class="p-stat"><span id="myFollowers">—</span><span>followers</span></div>
     </div>
     <div class="write-box" id="editProfileBox" style="margin-top:1.25rem;display:none;">
       <div class="section-title" style="margin-bottom:10px;">Edit Profile</div>
