@@ -646,6 +646,14 @@ body {
   flex-shrink: 0;
 }
 
+.track-perfect { color: #FFD700; font-weight: 700; }
+.track-amazing { color: #4FC3F7; font-weight: 600; }
+.track-great   { color: #66BB6A; }
+.track-good    { color: #A5D6A7; }
+.track-meh     { color: #FFB74D; }
+.track-bad     { color: #EF5350; }
+.track-awful   { color: #8B2E2E; text-decoration: line-through; opacity: 0.75; }
+
 /* ── REVIEWS ── */
 .reviews-wrap {
   padding: 1.5rem;

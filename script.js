@@ -125,11 +125,12 @@ async function saveProfileEdits() {
       if (!upRes.ok) throw new Error('upload failed');
       avatarUrl = `${SB_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
     }
+    const visibility = document.getElementById('editTrackVisibility').value;
     const updated = await sb('profiles', 'PATCH',
-      { username: newUsername, avatar_url: avatarUrl },
+      { username: newUsername, avatar_url: avatarUrl, track_rating_visibility: visibility },
       `?user_id=eq.${USER_ID}`
     );
-    myProfile = updated?.[0] || { ...myProfile, username: newUsername, avatar_url: avatarUrl };
+    myProfile = updated?.[0] || { ...myProfile, username: newUsername, avatar_url: avatarUrl, track_rating_visibility: visibility };
     updateAuthUI();
     renderProfileInfo();
     toast('Profile updated successfully ✓');
@@ -605,20 +606,129 @@ async function loadTracklist(mbid) {
     if (credit) document.getElementById('dArtist').textContent = credit;
 
     // ── Tracklist ──
-    const tracks = d.media?.flatMap(m => m.tracks || []) || [];
-    if (!tracks.length) {
+    currentTracks = d.media?.flatMap(m => m.tracks || []) || [];
+    if (!currentTracks.length) {
       el.innerHTML = '<div class="empty"><i class="ti ti-playlist-x"></i><p>Tracklist not available.</p></div>';
       return;
     }
-    el.innerHTML = tracks.map(t => `
-      <div class="track-item">
-        <span class="track-num">${t.number || t.position}</span>
-        <span class="track-title">${t.title}</span>
-        <span class="track-dur">${fmtDuration(t.length)}</span>
-      </div>`).join('');
+    await loadTrackRatings(mbid);
+    openTrackNum = null;
+    renderTracklist();
   } catch {
     el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load tracklist.</p></div>';
   }
+}
+
+// ── PER-TRACK RATINGS ─────────────────────────────────────────
+const TRACK_CATEGORIES = ['perfect', 'amazing', 'great', 'good', 'meh', 'bad', 'awful'];
+const TRACK_CATEGORY_LABELS = {
+  perfect: 'Perfect', amazing: 'Amazing', great: 'Great', good: 'Good',
+  meh: 'Meh', bad: 'Bad', awful: 'Awful'
+};
+
+let currentTracks = [];
+let allTrackRatings = {};
+let trackViewers = [];
+let viewingUserId = null;
+let openTrackNum = null;
+
+async function loadTrackRatings(mbid) {
+  allTrackRatings = {};
+  trackViewers = [];
+  viewingUserId = USER_ID || null;
+  try {
+    const rows = await sb('track_ratings', 'GET', null, `?mbid=eq.${mbid}&select=user_id,track_number,category`);
+    const userIds = new Set();
+    (rows || []).forEach(r => {
+      if (!allTrackRatings[r.user_id]) allTrackRatings[r.user_id] = {};
+      allTrackRatings[r.user_id][r.track_number] = r.category;
+      userIds.add(r.user_id);
+    });
+    if (userIds.size) {
+      const idList = [...userIds].join(',');
+      trackViewers = await sb('profiles', 'GET', null, `?user_id=in.(${idList})&select=user_id,username`);
+    }
+  } catch { /* ignore, tracklist still works without colors */ }
+}
+
+function trackClassFor(num) {
+  const cat = viewingUserId && allTrackRatings[viewingUserId] ? allTrackRatings[viewingUserId][num] : null;
+  return cat ? `track-${cat}` : '';
+}
+
+function renderTracklist() {
+  const el = document.getElementById('dTracklist');
+  const others = (trackViewers || []).filter(v => v.user_id !== USER_ID);
+  const viewerSelectHtml = (currentUser && others.length)
+    ? `<div style="margin-bottom:10px;font-size:12px;color:var(--text2);">
+        Viewing colors from:
+        <select onchange="switchTrackViewer(this.value)" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;">
+          <option value="${USER_ID}">Me</option>
+          ${others.map(v => `<option value="${esc(v.user_id)}" ${viewingUserId === v.user_id ? 'selected' : ''}>${v.username}</option>`).join('')}
+        </select>
+      </div>`
+    : '';
+
+  el.innerHTML = viewerSelectHtml + currentTracks.map(t => {
+    const num = t.number || t.position;
+    const cls = trackClassFor(num);
+    const isOpen = openTrackNum === num;
+    return `
+      <div class="track-item" style="flex-direction:column;align-items:stretch;cursor:pointer;" onclick="toggleTrackMenu('${esc(num)}')">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="track-num">${num}</span>
+          <span class="track-title ${cls}">${t.title}</span>
+          <span class="track-dur">${fmtDuration(t.length)}</span>
+        </div>
+        ${isOpen ? `
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-left:32px;" onclick="event.stopPropagation()">
+          ${TRACK_CATEGORIES.map(c => `<button class="genre-chip track-${c}" onclick="setTrackCategory('${esc(num)}','${c}','${esc(t.title)}')">${TRACK_CATEGORY_LABELS[c]}</button>`).join('')}
+          ${cls ? `<button class="genre-chip" onclick="clearTrackCategory('${esc(num)}')">Clear</button>` : ''}
+        </div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function toggleTrackMenu(num) {
+  if (!requireLogin()) return;
+  openTrackNum = (openTrackNum === num) ? null : num;
+  renderTracklist();
+}
+
+async function setTrackCategory(num, category, title) {
+  try {
+    await sb('track_ratings', 'POST',
+      { user_id: USER_ID, mbid: currentAlbum.mbid, track_number: num, track_title: title, category },
+      '?on_conflict=user_id,mbid,track_number'
+    );
+    if (!allTrackRatings[USER_ID]) allTrackRatings[USER_ID] = {};
+    allTrackRatings[USER_ID][num] = category;
+    viewingUserId = USER_ID;
+    openTrackNum = null;
+    renderTracklist();
+    toast('Track rated ✓');
+  } catch {
+    toast('Failed to save track rating');
+  }
+}
+
+async function clearTrackCategory(num) {
+  try {
+    await sb('track_ratings', 'DELETE', null,
+      `?user_id=eq.${USER_ID}&mbid=eq.${currentAlbum.mbid}&track_number=eq.${encodeURIComponent(num)}`);
+    if (allTrackRatings[USER_ID]) delete allTrackRatings[USER_ID][num];
+    openTrackNum = null;
+    renderTracklist();
+    toast('Track rating cleared');
+  } catch {
+    toast('Failed to clear rating');
+  }
+}
+
+function switchTrackViewer(userId) {
+  viewingUserId = userId;
+  openTrackNum = null;
+  renderTracklist();
 }
 
 // ── DETAIL ────────────────────────────────────────────────────
@@ -926,6 +1036,8 @@ function renderProfileInfo() {
   document.getElementById('writeName').textContent = name;
   const editInput = document.getElementById('editUsername');
   if (editInput) editInput.value = name;
+  const visInput = document.getElementById('editTrackVisibility');
+  if (visInput) visInput.value = myProfile?.track_rating_visibility || 'public';
 }
 
 async function loadProfile() {
