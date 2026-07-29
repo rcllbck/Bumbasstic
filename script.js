@@ -21,6 +21,7 @@ async function handleSession(session) {
   myProfile = null;
   if (currentUser) await ensureProfile();
   updateAuthUI();
+  await loadNotifications();
   if (location.hash.includes('access_token')) {
     history.replaceState(null, '', window.location.pathname);
   }
@@ -243,6 +244,37 @@ async function renderGrid(containerId, albums) {
 }
 
 // ── HOME ──────────────────────────────────────────────────────
+async function loadNewReleases() {
+  const el = document.getElementById('newReleasesGrid');
+  try {
+    const end = new Date();
+    const start = new Date(end.getTime() - 60 * 24 * 60 * 60 * 1000); // last 60 days
+    const fmt = d => d.toISOString().slice(0, 10);
+    const r = await fetch(
+      `${MB}/release/?query=date:[${fmt(start)} TO ${fmt(end)}] AND status:official&fmt=json&limit=25`,
+      { headers: { 'Accept': 'application/json', 'User-Agent': 'Albumly/1.0' } }
+    );
+    const d = await r.json();
+    const releases = (d.releases || [])
+      .filter(rel => rel.date && rel['artist-credit']?.length && /^\d{4}-\d{2}-\d{2}$/.test(rel.date))
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 8)
+      .map(rel => ({
+        mbid: rel.id,
+        title: rel.title,
+        artist: rel['artist-credit'].map(c => c.name).join(', '),
+        year: rel.date.slice(0, 4)
+      }));
+    if (!releases.length) {
+      el.innerHTML = '<div class="empty"><i class="ti ti-calendar-off"></i><p>No recent releases found.</p></div>';
+      return;
+    }
+    await renderGrid('newReleasesGrid', releases);
+  } catch {
+    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load new releases.</p></div>';
+  }
+}
+
 async function loadHome() {
   try {
     const [r, rv, s] = await Promise.all([
@@ -287,6 +319,8 @@ async function loadHome() {
     document.getElementById('homeGrid').innerHTML =
       '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load. Make sure your internet connection is active.</p></div>';
   }
+
+  loadNewReleases();
 }
 
 // ── SEARCH ────────────────────────────────────────────────────
@@ -465,6 +499,97 @@ function fmtDuration(ms) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+// ── NOTIFICATIONS ─────────────────────────────────────────────
+let notifications = [];
+
+async function loadNotifications() {
+  if (!USER_ID) {
+    notifications = [];
+    updateNotifBadge();
+    return;
+  }
+  try {
+    const rows = await sb('notifications', 'GET', null, `?user_id=eq.${USER_ID}&order=created_at.desc&limit=20`);
+    notifications = rows || [];
+    const actorIds = [...new Set(notifications.map(n => n.actor_id))];
+    let actorMap = {};
+    if (actorIds.length) {
+      const profiles = await sb('profiles', 'GET', null, `?user_id=in.(${actorIds.join(',')})&select=user_id,username,avatar_url`);
+      (profiles || []).forEach(p => actorMap[p.user_id] = p);
+    }
+    notifications.forEach(n => n.actor = actorMap[n.actor_id] || { username: 'someone', avatar_url: null });
+    updateNotifBadge();
+  } catch { /* ignore */ }
+}
+
+function updateNotifBadge() {
+  const badge = document.getElementById('notifBadge');
+  if (!badge) return;
+  const unread = notifications.filter(n => !n.is_read).length;
+  if (unread > 0) {
+    badge.textContent = unread > 9 ? '9+' : unread;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function timeAgo(dateStr) {
+  const diffSec = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (diffSec < 60) return 'just now';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  return `${Math.floor(diffSec / 86400)}d ago`;
+}
+
+function renderNotifPanel() {
+  const el = document.getElementById('notifPanel');
+  if (!notifications.length) {
+    el.innerHTML = '<div class="empty" style="padding:1.5rem;"><i class="ti ti-bell-off"></i><p>No notifications yet.</p></div>';
+    return;
+  }
+  el.innerHTML = notifications.map(n => {
+    const text = n.type === 'follow' ? `<b>${n.actor.username}</b> started following you` : '';
+    return `
+    <div class="notif-item ${n.is_read ? '' : 'unread'}">
+      <div class="notif-av">${avatarHtml(n.actor.avatar_url, n.actor.username)}</div>
+      <div>
+        <div>${text}</div>
+        <div class="notif-time">${timeAgo(n.created_at)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function markAllNotifsRead() {
+  const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+  if (!unreadIds.length) return;
+  try {
+    await sb('notifications', 'PATCH', { is_read: true }, `?id=in.(${unreadIds.join(',')})`);
+    notifications.forEach(n => n.is_read = true);
+    updateNotifBadge();
+  } catch { /* ignore */ }
+}
+
+function toggleNotifPanel() {
+  if (!requireLogin()) return;
+  const panel = document.getElementById('notifPanel');
+  const opening = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = opening ? 'block' : 'none';
+  if (opening) {
+    renderNotifPanel();
+    markAllNotifsRead();
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('notifPanel');
+  const bell = document.getElementById('notifBell');
+  if (panel && panel.style.display === 'block' && !panel.contains(e.target) && !bell.contains(e.target)) {
+    panel.style.display = 'none';
+  }
+});
+
 // ── FRIENDS (follow) ──────────────────────────────────────────
 async function loadMyFollowing() {
   if (!USER_ID) return;
@@ -517,6 +642,9 @@ async function toggleFollow(targetId, btn) {
     } else {
       await sb('follows', 'POST', { follower_id: USER_ID, following_id: targetId });
       myFollowing.add(targetId);
+      try {
+        await sb('notifications', 'POST', { user_id: targetId, actor_id: USER_ID, type: 'follow' });
+      } catch { /* non-critical */ }
       if (btn) { btn.textContent = 'Following'; btn.classList.add('saved'); }
       toast('Followed successfully ✓');
     }
@@ -1134,3 +1262,5 @@ const VALID_PAGES = ['home', 'search', 'trending', 'genres', 'profile', 'friends
     showPage(startHash);
   }
 })();
+
+setInterval(() => { if (USER_ID) loadNotifications(); }, 30000);

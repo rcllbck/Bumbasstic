@@ -49,7 +49,14 @@
     <button class="nav-btn" onclick="showPage('genres')" id="nav-genres"><i class="ti ti-layout-grid"></i> Genre</button>
     <button class="nav-btn" onclick="showPage('friends')" id="nav-friends"><i class="ti ti-users"></i> Friends</button>
   </div>
-  <div class="avatar" id="avatarBtn">AL</div>
+  <div style="position:relative;display:flex;align-items:center;gap:10px;">
+    <button class="nav-btn" id="notifBell" onclick="toggleNotifPanel()" style="position:relative;">
+      <i class="ti ti-bell"></i>
+      <span id="notifBadge" class="notif-badge" style="display:none;"></span>
+    </button>
+    <div id="notifPanel" class="notif-panel" style="display:none;"></div>
+    <div class="avatar" id="avatarBtn">AL</div>
+  </div>
 </nav>
 
 <!-- HOME -->
@@ -70,6 +77,12 @@
       <span class="section-title">popular album</span>
     </div>
     <div id="homeGrid"><div class="loader"><div class="spinner"></div> loading...</div></div>
+  </div>
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">new releases</span>
+    </div>
+    <div id="newReleasesGrid"><div class="loader"><div class="spinner"></div> loading...</div></div>
   </div>
 </div>
 
