@@ -202,6 +202,20 @@ let myRatings = {}, mySaved = new Set(), myFavAlbums = new Set(), myFollowing = 
 function esc(s) {
   return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
+function starFillPct(rating, idx) {
+  if (rating >= idx) return 100;
+  if (rating >= idx - 0.5) return 50;
+  return 0;
+}
+
+function starsHtml(rating, size = 14) {
+  return [1, 2, 3, 4, 5].map(i => `
+    <span style="position:relative;display:inline-block;width:${size}px;height:${size}px;line-height:1;font-size:${size}px;vertical-align:middle;">
+      <span style="position:absolute;left:0;top:0;color:var(--text3);">★</span>
+      <span style="position:absolute;left:0;top:0;width:${starFillPct(rating, i)}%;overflow:hidden;color:#f59e0b;white-space:nowrap;">★</span>
+    </span>`).join('');
+}
+
 function starsStr(n) {
   return '★'.repeat(n) + '☆'.repeat(5 - n);
 }
@@ -236,7 +250,7 @@ async function renderGrid(containerId, albums) {
         <div class="album-title">${a.title}</div>
         <div class="album-artist">${a.artist}</div>
         <div class="album-bottom">
-          <span class="stars-sm">${myRatings[a.mbid] ? '★'.repeat(myRatings[a.mbid]) : '—'}</span>
+          <span class="stars-sm">${myRatings[a.mbid] ? starsHtml(myRatings[a.mbid], 11) : '—'}</span>
           <span class="year-sm">${a.year || '—'}</span>
         </div>
       </div>
@@ -549,7 +563,7 @@ function renderNotifPanel() {
     return;
   }
   el.innerHTML = notifications.map(n => {
-    const text = n.type === 'follow' ? `<b>${n.actor.username}</b> started following you` : '';
+    const text = n.type === 'follow' ? `<b style="cursor:pointer;" onclick="closeNotifPanel(); viewUserProfile('${esc(n.actor_id)}')">${n.actor.username}</b> started following you` : '';
     return `
     <div class="notif-item ${n.is_read ? '' : 'unread'}">
       <div class="notif-av">${avatarHtml(n.actor.avatar_url, n.actor.username)}</div>
@@ -571,6 +585,11 @@ async function markAllNotifsRead() {
   } catch { /* ignore */ }
 }
 
+function closeNotifPanel() {
+  const panel = document.getElementById('notifPanel');
+  if (panel) panel.style.display = 'none';
+}
+
 function toggleNotifPanel() {
   if (!requireLogin()) return;
   const panel = document.getElementById('notifPanel');
@@ -589,6 +608,115 @@ document.addEventListener('click', (e) => {
     panel.style.display = 'none';
   }
 });
+
+// ── PUBLIC USER PROFILE ───────────────────────────────────────
+let currentViewedUserId = null;
+
+async function viewUserProfile(userId) {
+  if (userId === USER_ID) { showPage('profile'); return; }
+  currentViewedUserId = userId;
+  const cur = document.querySelector('.page.active');
+  prevPage = cur ? cur.id.replace('page-', '') : 'home';
+  showPage('userprofile', true);
+
+  document.getElementById('upName').textContent = 'Loading...';
+  document.getElementById('upAv').innerHTML = '?';
+  document.getElementById('upFavAlbums').innerHTML = '<div class="loader"><div class="spinner"></div> loading...</div>';
+  document.getElementById('upFeed').innerHTML = '<div class="loader"><div class="spinner"></div> loading...</div>';
+
+  try {
+    const profRows = await sb('profiles', 'GET', null, `?user_id=eq.${userId}&select=*`);
+    const prof = profRows?.[0];
+    if (!prof) {
+      document.getElementById('upName').textContent = 'User not found';
+      return;
+    }
+    document.getElementById('upName').textContent = prof.username;
+    document.getElementById('upAv').innerHTML = avatarHtml(prof.avatar_url, prof.username);
+
+    const followBtn = document.getElementById('upFollowBtn');
+    if (currentUser) {
+      await loadMyFollowing();
+      const following = myFollowing.has(userId);
+      followBtn.style.display = 'inline-flex';
+      followBtn.textContent = following ? 'Following' : 'Follow';
+      followBtn.className = 'btn-save' + (following ? ' saved' : '');
+      followBtn.onclick = () => toggleFollow(userId, followBtn);
+    } else {
+      followBtn.style.display = 'inline-flex';
+      followBtn.textContent = 'Follow';
+      followBtn.onclick = () => requireLogin();
+    }
+
+    const [ratings, reviews, followingRows, followersRows, favAlbums] = await Promise.all([
+      sb('ratings', 'GET', null, `?user_id=eq.${userId}&order=created_at.desc`),
+      sb('reviews', 'GET', null, `?user_id=eq.${userId}&order=created_at.desc`),
+      sb('follows', 'GET', null, `?follower_id=eq.${userId}&select=following_id`),
+      sb('follows', 'GET', null, `?following_id=eq.${userId}&select=follower_id`),
+      sb('favorite_albums', 'GET', null, `?user_id=eq.${userId}&order=created_at.desc`)
+    ]);
+    document.getElementById('upRated').textContent = ratings?.length || 0;
+    document.getElementById('upReviewed').textContent = reviews?.length || 0;
+    document.getElementById('upFollowing').textContent = followingRows?.length || 0;
+    document.getElementById('upFollowers').textContent = followersRows?.length || 0;
+
+    document.getElementById('upFavAlbums').innerHTML = favAlbums?.length
+      ? `<div class="album-grid">${favAlbums.map(a => `
+          <div class="album-card" onclick="openDetail('${esc(a.mbid)}','${esc(a.album_title)}','${esc(a.artist)}','—','${esc(a.cover_url || '')}')">
+            ${coverEl(a.cover_url, '🎵', 'album-cover')}
+            <div class="album-info"><div class="album-title">${a.album_title}</div><div class="album-artist">${a.artist}</div></div>
+          </div>`).join('')}</div>`
+      : '<div class="empty"><i class="ti ti-heart"></i><p>No favorite albums yet.</p></div>';
+
+    const items = [
+      ...(ratings || []).map(r => ({ ...r, kind: 'rating' })),
+      ...(reviews || []).map(r => ({ ...r, kind: 'review' }))
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20);
+
+    document.getElementById('upFeed').innerHTML = items.length
+      ? items.map(it => `
+          <div class="activity-item" style="cursor:pointer;" onclick="openDetail('${esc(it.mbid)}','${esc(it.album_title)}','${esc(it.artist)}','—','${esc(it.cover_url || '')}')">
+            <div class="act-img">${coverEl(it.cover_url, '🎵', 'act-img')}</div>
+            <div class="act-body">
+              <div class="act-title">${it.kind === 'rating' ? `Rated ⭐ ${it.stars} for` : 'Wrote a review for'} <i>${it.album_title}</i></div>
+              <div class="act-sub">${it.kind === 'review' ? esc(it.review_text).slice(0, 100) : ''}</div>
+            </div>
+          </div>`).join('')
+      : '<div class="empty"><i class="ti ti-mood-empty"></i><p>No activity yet.</p></div>';
+  } catch {
+    document.getElementById('upName').textContent = 'Failed to load profile';
+  }
+}
+
+async function openFollowList(userId, kind) {
+  if (!userId) return;
+  document.getElementById('followListTitle').textContent = kind === 'following' ? 'Following' : 'Followers';
+  document.getElementById('followListBody').innerHTML = '<div class="loader"><div class="spinner"></div> loading...</div>';
+  document.getElementById('followListModal').style.display = 'flex';
+  try {
+    const qs = kind === 'following'
+      ? `?follower_id=eq.${userId}&select=following_id`
+      : `?following_id=eq.${userId}&select=follower_id`;
+    const rows = await sb('follows', 'GET', null, qs);
+    const ids = (rows || []).map(r => kind === 'following' ? r.following_id : r.follower_id);
+    if (!ids.length) {
+      document.getElementById('followListBody').innerHTML = '<div class="empty" style="padding:1.5rem;"><p>No users yet.</p></div>';
+      return;
+    }
+    const profiles = await sb('profiles', 'GET', null, `?user_id=in.(${ids.join(',')})&select=user_id,username,avatar_url`);
+    document.getElementById('followListBody').innerHTML = (profiles || []).map(p => `
+      <div class="trend-item" onclick="closeFollowList(); viewUserProfile('${esc(p.user_id)}')">
+        <div class="trend-cover-ph">${avatarHtml(p.avatar_url, p.username)}</div>
+        <div class="trend-info"><div class="trend-title">${p.username}</div></div>
+      </div>`).join('');
+  } catch {
+    document.getElementById('followListBody').innerHTML = '<div class="empty" style="padding:1.5rem;"><p>Failed to load.</p></div>';
+  }
+}
+
+function closeFollowList() {
+  document.getElementById('followListModal').style.display = 'none';
+}
 
 // ── FRIENDS (follow) ──────────────────────────────────────────
 async function loadMyFollowing() {
@@ -616,12 +744,12 @@ async function searchFriends() {
     el.innerHTML = results.map(r => {
       const following = myFollowing.has(r.user_id);
       return `
-      <div class="trend-item" style="cursor:default;">
+      <div class="trend-item" style="cursor:pointer;" onclick="viewUserProfile('${esc(r.user_id)}')">
         <div class="trend-cover-ph">${avatarHtml(r.avatar_url, r.username)}</div>
         <div class="trend-info">
           <div class="trend-title">${r.username}</div>
         </div>
-        <button class="btn-save${following ? ' saved' : ''}" onclick="toggleFollow('${esc(r.user_id)}', this)">
+        <button class="btn-save${following ? ' saved' : ''}" onclick="event.stopPropagation(); toggleFollow('${esc(r.user_id)}', this)">
           ${following ? 'Following' : 'Follow'}
         </button>
       </div>`;
@@ -694,7 +822,7 @@ async function loadFriendsFeed() {
       <div class="activity-item" style="cursor:pointer;" onclick="openDetail('${esc(it.mbid)}','${esc(it.album_title)}','${esc(it.artist)}','—','${esc(it.cover_url || '')}')">
         <div class="act-img">${coverEl(it.cover_url, '🎵', 'act-img')}</div>
         <div class="act-body">
-          <div class="act-title"><b>${p.username}</b> ${sub} <i>${it.album_title}</i></div>
+          <div class="act-title"><b style="cursor:pointer;" onclick="event.stopPropagation(); viewUserProfile('${esc(it.user_id)}')">${p.username}</b> ${sub} <i>${it.album_title}</i></div>
           <div class="act-sub">${it.kind === 'review' ? esc(it.review_text).slice(0, 100) : ''}</div>
         </div>
       </div>`;
@@ -890,12 +1018,16 @@ async function openDetail(mbid, title, artist, year, coverUrl) {
 
   showPage('detail', true);
 
-  // Build star picker
+  // Build star picker (half-star capable)
   const myS = myRatings[mbid] || 0;
-  document.getElementById('starRow').innerHTML = [1, 2, 3, 4, 5].map(s =>
-    `<button class="star-btn ${s <= myS ? 'filled' : ''}" onclick="doRate('${esc(mbid)}',${s})"
-      onmouseover="hoverS(${s})" onmouseout="resetS('${esc(mbid)}')">★</button>`
-  ).join('');
+  document.getElementById('starRow').innerHTML = [1, 2, 3, 4, 5].map(i => `
+    <button class="star-btn" style="position:relative;width:24px;height:24px;padding:0;"
+      onclick="handleStarClick(event,'${esc(mbid)}',${i})"
+      onmousemove="hoverStarMove(event,${i})"
+      onmouseleave="resetS('${esc(mbid)}')">
+      <span style="position:absolute;inset:0;color:var(--text3);">★</span>
+      <span class="star-fg" data-idx="${i}" style="position:absolute;inset:0;width:${starFillPct(myS, i)}%;overflow:hidden;color:#f59e0b;white-space:nowrap;">★</span>
+    </button>`).join('');
 
   // Load DB data
   const [ratingRows, reviewRows] = await Promise.all([
@@ -906,7 +1038,7 @@ async function openDetail(mbid, title, artist, year, coverUrl) {
   if (ratingRows?.length) {
     const avg = (ratingRows.reduce((s, r) => s + r.stars, 0) / ratingRows.length).toFixed(1);
     document.getElementById('dRating').textContent = avg;
-    document.getElementById('dStars').textContent = starsStr(Math.round(avg));
+    document.getElementById('dStars').innerHTML = starsHtml(parseFloat(avg), 16);
     document.getElementById('dRatingSub').textContent = `average of ${ratingRows.length} ratings`;
   } else {
     document.getElementById('dRating').textContent = '—';
@@ -917,14 +1049,27 @@ async function openDetail(mbid, title, artist, year, coverUrl) {
   renderReviews(reviewRows || []);
 }
 
-function hoverS(n) {
-  document.querySelectorAll('.star-btn').forEach((b, i) =>
-    b.style.color = i < n ? '#f59e0b' : 'var(--text3)');
+function handleStarClick(event, mbid, idx) {
+  if (!requireLogin()) return;
+  const rect = event.currentTarget.getBoundingClientRect();
+  const frac = (event.clientX - rect.left) / rect.width;
+  const value = frac < 0.5 ? idx - 0.5 : idx;
+  doRate(mbid, value);
+}
+
+function hoverStarMove(event, idx) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const frac = (event.clientX - rect.left) / rect.width;
+  const hoverVal = frac < 0.5 ? idx - 0.5 : idx;
+  document.querySelectorAll('#starRow .star-fg').forEach(el => {
+    el.style.width = starFillPct(hoverVal, parseInt(el.dataset.idx)) + '%';
+  });
 }
 function resetS(mbid) {
   const u = myRatings[mbid] || 0;
-  document.querySelectorAll('.star-btn').forEach((b, i) =>
-    b.style.color = i < u ? '#f59e0b' : 'var(--text3)');
+  document.querySelectorAll('#starRow .star-fg').forEach(el => {
+    el.style.width = starFillPct(u, parseInt(el.dataset.idx)) + '%';
+  });
 }
 
 async function doRate(mbid, stars) {
@@ -942,7 +1087,7 @@ async function doRate(mbid, stars) {
     if (rows?.length) {
       const avg = (rows.reduce((s, r) => s + r.stars, 0) / rows.length).toFixed(1);
       document.getElementById('dRating').textContent = avg;
-      document.getElementById('dStars').textContent = starsStr(Math.round(avg));
+      document.getElementById('dStars').innerHTML = starsHtml(parseFloat(avg), 16);
       document.getElementById('dRatingSub').textContent = `average of ${rows.length} ratings`;
     }
   } catch {
@@ -1116,10 +1261,10 @@ function renderReviews(list) {
       <div class="review-top">
         <div class="rev-av">${(r.user_name || r.user_id || '?').slice(0, 2).toUpperCase()}</div>
         <div>
-          <div class="rev-name">${r.user_name || r.user_id}</div>
+          <div class="rev-name" style="cursor:pointer;" onclick="viewUserProfile('${esc(r.user_id)}')">${r.user_name || r.user_id}</div>
           <div class="rev-date">${new Date(r.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
         </div>
-        ${r.stars ? `<div class="rev-stars">${'★'.repeat(r.stars)}</div>` : ''}
+        ${r.stars ? `<div class="rev-stars">${starsHtml(r.stars, 12)}</div>` : ''}
       </div>
       <div class="rev-text">${r.review_text}</div>
     </div>`).join('');
@@ -1240,7 +1385,7 @@ function showPage(name, skipNav) {
     const btn = document.getElementById('nav-' + name);
     if (btn) btn.classList.add('active');
   }
-  if (name !== 'detail') {
+  if (name !== 'detail' && name !== 'userprofile') {
     history.replaceState(null, '', '#' + name);
   }
   if (name === 'trending') loadTrending();

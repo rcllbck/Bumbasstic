@@ -154,6 +154,45 @@
   </div>
 </div>
 
+<!-- USER PROFILE (public view) -->
+<div class="page" id="page-userprofile">
+  <button class="back-btn" onclick="goBack()"><i class="ti ti-arrow-left"></i> back</button>
+  <div class="profile-hero">
+    <div class="profile-top">
+      <div class="profile-av" id="upAv">?</div>
+      <div style="flex:1;">
+        <div class="profile-name" id="upName">—</div>
+      </div>
+      <button class="btn-save" id="upFollowBtn">Follow</button>
+    </div>
+    <div class="profile-stats">
+      <div class="p-stat"><span id="upRated">—</span><span>rated</span></div>
+      <div class="p-stat"><span id="upReviewed">—</span><span>review</span></div>
+      <div class="p-stat" style="cursor:pointer;" onclick="openFollowList(currentViewedUserId,'following')"><span id="upFollowing">—</span><span>following</span></div>
+      <div class="p-stat" style="cursor:pointer;" onclick="openFollowList(currentViewedUserId,'followers')"><span id="upFollowers">—</span><span>followers</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-header"><span class="section-title">Favorite Albums</span></div>
+    <div id="upFavAlbums"></div>
+  </div>
+  <div class="section">
+    <div class="section-header"><span class="section-title">Activity</span></div>
+    <div id="upFeed"><div class="loader"><div class="spinner"></div> loading...</div></div>
+  </div>
+</div>
+
+<!-- FOLLOW LIST MODAL -->
+<div id="followListModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) closeFollowList()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span id="followListTitle">Following</span>
+      <button onclick="closeFollowList()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div id="followListBody"></div>
+  </div>
+</div>
+
 <!-- DETAIL -->
 <div class="page" id="page-detail">
   <button class="back-btn" onclick="goBack()"><i class="ti ti-arrow-left"></i> back</button>
@@ -218,8 +257,8 @@
       <div class="p-stat"><span id="myRated">—</span><span>rated</span></div>
       <div class="p-stat"><span id="myReviewed">—</span><span>review</span></div>
       <div class="p-stat"><span id="mySaved">—</span><span>saved</span></div>
-      <div class="p-stat"><span id="myFollowing">—</span><span>following</span></div>
-      <div class="p-stat"><span id="myFollowers">—</span><span>followers</span></div>
+      <div class="p-stat" style="cursor:pointer;" onclick="openFollowList(USER_ID,'following')"><span id="myFollowing">—</span><span>following</span></div>
+      <div class="p-stat" style="cursor:pointer;" onclick="openFollowList(USER_ID,'followers')"><span id="myFollowers">—</span><span>followers</span></div>
     </div>
     <div class="write-box" id="editProfileBox" style="margin-top:1.25rem;display:none;">
       <div class="section-title" style="margin-bottom:10px;">Edit Profile</div>
