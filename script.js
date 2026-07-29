@@ -487,7 +487,7 @@ async function toggleFollow(targetId, btn) {
 async function loadFriendsFeed() {
   const el = document.getElementById('friendsFeed');
   if (!currentUser) {
-    el.innerHTML = '<div class="empty"><i class="ti ti-login"></i><p>Log in first to see friends' activity.</p></div>';
+    el.innerHTML = '<div class="empty"><i class="ti ti-login"></i><p>Log in first to see your friends\' activity.</p></div>';
     return;
   }
   el.innerHTML = '<div class="loader"><div class="spinner"></div> load...</div>';
