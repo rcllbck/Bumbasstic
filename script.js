@@ -127,11 +127,12 @@ async function saveProfileEdits() {
       avatarUrl = `${SB_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
     }
     const visibility = document.getElementById('editTrackVisibility').value;
+    const bio = document.getElementById('editBio').value.trim();
     const updated = await sb('profiles', 'PATCH',
-      { username: newUsername, avatar_url: avatarUrl, track_rating_visibility: visibility },
+      { username: newUsername, avatar_url: avatarUrl, track_rating_visibility: visibility, bio },
       `?user_id=eq.${USER_ID}`
     );
-    myProfile = updated?.[0] || { ...myProfile, username: newUsername, avatar_url: avatarUrl, track_rating_visibility: visibility };
+    myProfile = updated?.[0] || { ...myProfile, username: newUsername, avatar_url: avatarUrl, track_rating_visibility: visibility, bio };
     updateAuthUI();
     renderProfileInfo();
     toast('Profile updated successfully ✓');
@@ -338,6 +339,59 @@ async function loadHome() {
 }
 
 // ── SEARCH ────────────────────────────────────────────────────
+// ── ARTIST DETAIL ─────────────────────────────────────────────
+async function viewArtist(mbid) {
+  const cur = document.querySelector('.page.active');
+  prevPage = cur ? cur.id.replace('page-', '') : 'home';
+  showPage('artist', true);
+
+  document.getElementById('artName').textContent = 'Loading...';
+  document.getElementById('artMeta').innerHTML = '';
+  document.getElementById('artDiscography').innerHTML = '<div class="loader"><div class="spinner"></div> loading...</div>';
+
+  try {
+    const r = await fetch(`${MB}/artist/${mbid}?inc=release-groups+tags+genres+aliases&fmt=json`, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Albumly/1.0' }
+    });
+    const d = await r.json();
+
+    document.getElementById('artName').textContent = d.name;
+
+    const pills = [];
+    if (d.type) pills.push(d.type);
+    if (d.country) pills.push(d.country);
+    if (d['life-span']?.begin) {
+      const end = d['life-span'].ended ? (d['life-span'].end || 'ended') : 'present';
+      pills.push(`${d['life-span'].begin} – ${end}`);
+    }
+    (d.genres || []).slice(0, 5).forEach(g => pills.push(`#${g.name}`));
+    document.getElementById('artMeta').innerHTML = pills.map(p => `<span class="pill">${p}</span>`).join('');
+
+    const groups = (d['release-groups'] || [])
+      .filter(rg => rg['primary-type'] === 'Album' || rg['primary-type'] === 'EP')
+      .sort((a, b) => (b['first-release-date'] || '').localeCompare(a['first-release-date'] || ''));
+
+    if (!groups.length) {
+      document.getElementById('artDiscography').innerHTML =
+        '<div class="empty"><i class="ti ti-disc-off"></i><p>No discography found.</p></div>';
+      return;
+    }
+
+    document.getElementById('artDiscography').innerHTML = `<div class="album-grid">${groups.map(rg => `
+      <div class="album-card" onclick="doSearch('${esc(rg.title)}'); showPage('search');">
+        <div class="album-cover-ph">🎵</div>
+        <div class="album-info">
+          <div class="album-title">${rg.title}</div>
+          <div class="album-artist">${rg['first-release-date']?.slice(0, 4) || ''} · ${rg['primary-type']}</div>
+        </div>
+      </div>`).join('')}</div>`;
+  } catch {
+    document.getElementById('artName').textContent = 'Failed to load artist';
+    document.getElementById('artDiscography').innerHTML =
+      '<div class="empty"><i class="ti ti-wifi-off"></i><p>Failed to load.</p></div>';
+  }
+}
+
 async function doSearch(overrideQuery) {
   const input = document.getElementById('searchInput');
   const q = overrideQuery || input.value.trim();
@@ -359,7 +413,7 @@ async function doSearch(overrideQuery) {
     if (artists.length) {
       artistWrap.style.display = 'block';
       artistEl.innerHTML = artists.map(a => `
-        <div class="trend-item" onclick="doSearch('${esc(a.name)}')">
+        <div class="trend-item" onclick="viewArtist('${esc(a.mbid)}')">
           <div class="trend-cover-ph">🎤</div>
           <div class="trend-info">
             <div class="trend-title">${a.name}</div>
@@ -632,6 +686,7 @@ async function viewUserProfile(userId) {
       return;
     }
     document.getElementById('upName').textContent = prof.username;
+    document.getElementById('upBio').textContent = prof.bio || '';
     document.getElementById('upAv').innerHTML = avatarHtml(prof.avatar_url, prof.username);
 
     const followBtn = document.getElementById('upFollowBtn');
@@ -925,12 +980,13 @@ function renderTracklist() {
       </div>`
     : '';
 
+  const isOwnView = viewingUserId === USER_ID;
   el.innerHTML = viewerSelectHtml + currentTracks.map(t => {
     const num = t.number || t.position;
     const cls = trackClassFor(num);
     const isOpen = openTrackNum === num;
     return `
-      <div class="track-item" style="flex-direction:column;align-items:stretch;cursor:pointer;" onclick="toggleTrackMenu('${esc(num)}')">
+      <div class="track-item" style="flex-direction:column;align-items:stretch;cursor:${isOwnView ? 'pointer' : 'default'};" onclick="toggleTrackMenu('${esc(num)}')">
         <div style="display:flex;align-items:center;gap:12px;">
           <span class="track-num">${num}</span>
           <span class="track-title ${cls}">${t.title}</span>
@@ -947,6 +1003,10 @@ function renderTracklist() {
 
 function toggleTrackMenu(num) {
   if (!requireLogin()) return;
+  if (viewingUserId !== USER_ID) {
+    toast('Switch to "Me" first to rate your own tracks');
+    return;
+  }
   openTrackNum = (openTrackNum === num) ? null : num;
   renderTracklist();
 }
@@ -1303,12 +1363,14 @@ function renderProfileInfo() {
   const pic = myProfile?.avatar_url;
   const name = myProfile?.username || '—';
   document.getElementById('profileName').textContent = name;
-  document.getElementById('profileBio').textContent = '';
   document.getElementById('profileAv').innerHTML = avatarHtml(pic, name);
   document.getElementById('writeAv').innerHTML = avatarHtml(pic, name);
   document.getElementById('writeName').textContent = name;
+  document.getElementById('profileBio').textContent = myProfile?.bio || '';
   const editInput = document.getElementById('editUsername');
   if (editInput) editInput.value = name;
+  const bioInput = document.getElementById('editBio');
+  if (bioInput) bioInput.value = myProfile?.bio || '';
   const visInput = document.getElementById('editTrackVisibility');
   if (visInput) visInput.value = myProfile?.track_rating_visibility || 'public';
 }
@@ -1385,7 +1447,7 @@ function showPage(name, skipNav) {
     const btn = document.getElementById('nav-' + name);
     if (btn) btn.classList.add('active');
   }
-  if (name !== 'detail' && name !== 'userprofile') {
+  if (name !== 'detail' && name !== 'userprofile' && name !== 'artist') {
     history.replaceState(null, '', '#' + name);
   }
   if (name === 'trending') loadTrending();
