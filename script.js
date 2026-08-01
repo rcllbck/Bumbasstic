@@ -353,6 +353,27 @@ async function loadHome() {
 }
 
 // ── SEARCH ────────────────────────────────────────────────────
+async function getArtistImage(mbid) {
+  try {
+    const r = await fetch(`${MB}/artist/${mbid}?inc=url-rels&fmt=json`, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Albumly/1.0' }
+    });
+    const d = await r.json();
+    const wikidataRel = (d.relations || []).find(rel => rel.type === 'wikidata' && rel.url?.resource);
+    if (!wikidataRel) return null;
+    const match = wikidataRel.url.resource.match(/Q\d+/);
+    if (!match) return null;
+    const qid = match[0];
+    const wr = await fetch(`https://www.wikidata.org/wiki/Special:EntityData/${qid}.json`);
+    const wd = await wr.json();
+    const filename = wd.entities?.[qid]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+    if (!filename) return null;
+    return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}?width=300`;
+  } catch {
+    return null;
+  }
+}
+
 // ── ARTIST DETAIL ─────────────────────────────────────────────
 async function viewArtist(mbid) {
   const cur = document.querySelector('.page.active');
@@ -370,6 +391,13 @@ async function viewArtist(mbid) {
     const d = await r.json();
 
     document.getElementById('artName').textContent = d.name;
+
+    getArtistImage(mbid).then(imgUrl => {
+      if (imgUrl) {
+        document.getElementById('artCoverWrap').innerHTML =
+          `<img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<i class=\\'ti ti-microphone\\' style=\\'font-size:48px;\\'></i>'">`;
+      }
+    });
 
     const favBtn = document.getElementById('artFavBtn');
     favBtn.onclick = () => toggleArtistFavorite(mbid, d.name);
@@ -1285,7 +1313,10 @@ async function renderFavArtists() {
       return;
     }
     el.innerHTML = rows.map(r => `
-      <button class="genre-chip active" onclick="removeFavArtist('${esc(r.artist_name)}')">${r.artist_name} ✕</button>
+      <button class="genre-chip active" style="display:inline-flex;align-items:center;gap:6px;">
+        <span onclick="viewArtist('${esc(r.artist_mbid)}')" style="cursor:pointer;">${r.artist_name}</span>
+        <span onclick="event.stopPropagation(); removeFavArtist('${esc(r.artist_name)}')" style="cursor:pointer;opacity:0.7;">✕</span>
+      </button>
     `).join('');
   } catch {
     el.innerHTML = '';
