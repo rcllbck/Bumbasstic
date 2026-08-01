@@ -375,6 +375,33 @@ async function getArtistImage(mbid) {
 }
 
 // ── ARTIST DETAIL ─────────────────────────────────────────────
+let discographyGroups = [];
+let discographyArtistName = '';
+
+async function openDiscographyAlbum(idx) {
+  const rg = discographyGroups[idx];
+  if (!rg) return;
+  const card = document.getElementById(`discCard${idx}`);
+  const originalHtml = card.innerHTML;
+  card.style.opacity = '0.6';
+
+  try {
+    const r = await fetch(`${MB}/release-group/${rg.id}?inc=releases&fmt=json`, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Albumly/1.0' }
+    });
+    const d = await r.json();
+    const release = d.releases?.[0];
+    if (!release) {
+      toast('No release data available for this album');
+      card.style.opacity = '1';
+      return;
+    }
+    openDetail(release.id, rg.title, discographyArtistName, rg['first-release-date']?.slice(0, 4) || '—', rg.cover || '');
+  } catch {
+    toast('Failed to open album');
+  }
+  card.style.opacity = '1';
+}
 async function viewArtist(mbid) {
   const cur = document.querySelector('.page.active');
   prevPage = cur ? cur.id.replace('page-', '') : 'home';
@@ -437,14 +464,17 @@ async function viewArtist(mbid) {
       groups.map(async rg => ({ ...rg, cover: await getCoverRG(rg.id) }))
     );
 
-    document.getElementById('artDiscography').innerHTML = `<div class="album-grid">${groupsWithCovers.map(rg => `
-      <div class="album-card" onclick="doSearch('${esc(rg.title)}'); showPage('search');">
+    document.getElementById('artDiscography').innerHTML = `<div class="album-grid">${groupsWithCovers.map((rg, i) => `
+      <div class="album-card" id="discCard${i}" onclick="openDiscographyAlbum(${i})">
         ${coverEl(rg.cover, '🎵', 'album-cover')}
         <div class="album-info">
           <div class="album-title">${rg.title}</div>
           <div class="album-artist">${rg['first-release-date']?.slice(0, 4) || ''} · ${rg['primary-type']}</div>
         </div>
       </div>`).join('')}</div>`;
+
+    discographyGroups = groupsWithCovers;
+    discographyArtistName = d.name;
   } catch {
     document.getElementById('artName').textContent = 'Failed to load artist';
     document.getElementById('artDiscography').innerHTML =
