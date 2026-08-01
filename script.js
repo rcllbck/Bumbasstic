@@ -172,6 +172,8 @@ async function sb(table, method = 'GET', body = null, qs = '') {
 
 // ── MusicBrainz ──────────────────────────────────────────────
 const coverCache = {};
+const coverCacheRG = {};
+const CAA_RG = 'https://coverartarchive.org/release-group';
 
 async function getCover(mbid) {
   if (coverCache[mbid] !== undefined) return coverCache[mbid];
@@ -182,6 +184,17 @@ async function getCover(mbid) {
     coverCache[mbid] = null;
   }
   return coverCache[mbid];
+}
+
+async function getCoverRG(mbid) {
+  if (coverCacheRG[mbid] !== undefined) return coverCacheRG[mbid];
+  try {
+    const r = await fetch(`${CAA_RG}/${mbid}/front-250`, { method: 'HEAD' });
+    coverCacheRG[mbid] = r.ok ? `${CAA_RG}/${mbid}/front-250` : null;
+  } catch {
+    coverCacheRG[mbid] = null;
+  }
+  return coverCacheRG[mbid];
 }
 
 async function mbSearch(q, limit = 12) {
@@ -378,9 +391,13 @@ async function viewArtist(mbid) {
       return;
     }
 
-    document.getElementById('artDiscography').innerHTML = `<div class="album-grid">${groups.map(rg => `
+    const groupsWithCovers = await Promise.all(
+      groups.map(async rg => ({ ...rg, cover: await getCoverRG(rg.id) }))
+    );
+
+    document.getElementById('artDiscography').innerHTML = `<div class="album-grid">${groupsWithCovers.map(rg => `
       <div class="album-card" onclick="doSearch('${esc(rg.title)}'); showPage('search');">
-        <div class="album-cover-ph">🎵</div>
+        ${coverEl(rg.cover, '🎵', 'album-cover')}
         <div class="album-info">
           <div class="album-title">${rg.title}</div>
           <div class="album-artist">${rg['first-release-date']?.slice(0, 4) || ''} · ${rg['primary-type']}</div>
