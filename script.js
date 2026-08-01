@@ -371,6 +371,20 @@ async function viewArtist(mbid) {
 
     document.getElementById('artName').textContent = d.name;
 
+    const favBtn = document.getElementById('artFavBtn');
+    favBtn.onclick = () => toggleArtistFavorite(mbid, d.name);
+    favBtn.classList.remove('saved');
+    document.getElementById('artFavText').textContent = 'Favorite';
+    if (currentUser) {
+      try {
+        const favRows = await sb('favorite_artists', 'GET', null, `?user_id=eq.${USER_ID}&artist_name=eq.${encodeURIComponent(d.name)}`);
+        if (favRows?.length) {
+          favBtn.classList.add('saved');
+          document.getElementById('artFavText').textContent = 'Favorited ♥';
+        }
+      } catch { /* ignore */ }
+    }
+
     const pills = [];
     if (d.type) pills.push(d.type);
     if (d.country) pills.push(d.country);
@@ -1223,28 +1237,18 @@ async function mbArtistSearch(q, limit = 8) {
   return (d.artists || []).map(a => ({ mbid: a.id, name: a.name, country: a.country || '' }));
 }
 
-async function searchFavArtist() {
+async function toggleArtistFavorite(mbid, name) {
   if (!requireLogin()) return;
-  const q = document.getElementById('favArtistInput').value.trim();
-  if (!q) return;
-  const el = document.getElementById('favArtistResults');
-  el.innerHTML = '<div class="loader"><div class="spinner"></div> searching...</div>';
-  try {
-    const artists = await mbArtistSearch(q);
-    if (!artists.length) {
-      el.innerHTML = '<div class="empty"><i class="ti ti-user-off"></i><p>Artist not found.</p></div>';
-      return;
-    }
-    el.innerHTML = artists.map(a => `
-      <div class="trend-item" onclick="addFavArtist('${esc(a.mbid)}','${esc(a.name)}')">
-        <div class="trend-cover-ph">🎤</div>
-        <div class="trend-info">
-          <div class="trend-title">${a.name}</div>
-          <div class="trend-artist">${a.country || ''}</div>
-        </div>
-      </div>`).join('');
-  } catch {
-    el.innerHTML = '<div class="empty"><i class="ti ti-wifi-off"></i><p>Search failed.</p></div>';
+  const btn = document.getElementById('artFavBtn');
+  const isFav = btn.classList.contains('saved');
+  if (isFav) {
+    await removeFavArtist(name);
+    btn.classList.remove('saved');
+    document.getElementById('artFavText').textContent = 'Favorite';
+  } else {
+    await addFavArtist(mbid, name);
+    btn.classList.add('saved');
+    document.getElementById('artFavText').textContent = 'Favorited ♥';
   }
 }
 
@@ -1254,8 +1258,6 @@ async function addFavArtist(mbid, name) {
       { user_id: USER_ID, artist_mbid: mbid, artist_name: name },
       '?on_conflict=user_id,artist_name'
     );
-    document.getElementById('favArtistResults').innerHTML = '';
-    document.getElementById('favArtistInput').value = '';
     toast(`${name} added to favorite artists ✓`);
     await renderFavArtists();
   } catch {

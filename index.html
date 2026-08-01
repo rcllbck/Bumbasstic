@@ -191,6 +191,7 @@
     <div class="detail-info">
       <div class="detail-title" id="artName">—</div>
       <div class="detail-pills" id="artMeta"></div>
+      <button class="btn-save" id="artFavBtn" style="margin-top:10px;"><i class="ti ti-heart"></i> <span id="artFavText">Favorite</span></button>
     </div>
   </div>
   <div class="section">
@@ -314,15 +315,8 @@
   <div class="section">
     <div class="section-header">
       <span class="section-title">Favorite Artists</span>
+      <span style="font-size:11px;color:var(--text3);">tap the ♥ on an artist page to add</span>
     </div>
-    <div class="search-bar-big" style="padding:0 0 12px;background:none;border:none;">
-      <div class="search-input-wrap">
-        <i class="ti ti-search"></i>
-        <input type="text" id="favArtistInput" placeholder="search artist name..." onkeydown="if(event.key==='Enter') searchFavArtist()">
-      </div>
-      <button class="btn-primary" onclick="searchFavArtist()">Search</button>
-    </div>
-    <div id="favArtistResults"></div>
     <div id="favArtistChips" class="genre-chips" style="padding:10px 0;background:none;border:none;flex-wrap:wrap;"></div>
   </div>
   <div class="section" id="profileFeed"><div class="loader"><div class="spinner"></div> load...</div></div>
