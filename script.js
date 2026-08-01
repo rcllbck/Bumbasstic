@@ -135,6 +135,7 @@ async function saveProfileEdits() {
     myProfile = updated?.[0] || { ...myProfile, username: newUsername, avatar_url: avatarUrl, track_rating_visibility: visibility, bio };
     updateAuthUI();
     renderProfileInfo();
+    document.getElementById('editProfileBox').style.display = 'none';
     toast('Profile updated successfully ✓');
   } catch {
     toast('Failed to save profile');
@@ -936,6 +937,10 @@ const TRACK_CATEGORY_LABELS = {
   perfect: 'Perfect', amazing: 'Amazing', great: 'Great', good: 'Good',
   meh: 'Meh', bad: 'Bad', awful: 'Awful'
 };
+const TRACK_CATEGORY_COLORS = {
+  perfect: '#FFD700', amazing: '#4FC3F7', great: '#66BB6A', good: '#A5D6A7',
+  meh: '#FFB74D', bad: '#EF5350', awful: '#8B2E2E'
+};
 
 let currentTracks = [];
 let allTrackRatings = {};
@@ -969,6 +974,12 @@ function trackClassFor(num) {
 
 function renderTracklist() {
   const el = document.getElementById('dTracklist');
+  const legendHtml = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:10px;color:var(--text2);">
+    ${TRACK_CATEGORIES.map(c => `
+      <span style="display:flex;align-items:center;gap:4px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${TRACK_CATEGORY_COLORS[c]};display:inline-block;"></span>${TRACK_CATEGORY_LABELS[c]}
+      </span>`).join('')}
+  </div>`;
   const others = (trackViewers || []).filter(v => v.user_id !== USER_ID);
   const viewerSelectHtml = (currentUser && others.length)
     ? `<div style="margin-bottom:10px;font-size:12px;color:var(--text2);">
@@ -981,7 +992,7 @@ function renderTracklist() {
     : '';
 
   const isOwnView = viewingUserId === USER_ID;
-  el.innerHTML = viewerSelectHtml + currentTracks.map(t => {
+  el.innerHTML = legendHtml + viewerSelectHtml + currentTracks.map(t => {
     const num = t.number || t.position;
     const cls = trackClassFor(num);
     const isOpen = openTrackNum === num;
@@ -995,7 +1006,7 @@ function renderTracklist() {
         ${isOpen ? `
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-left:32px;" onclick="event.stopPropagation()">
           ${TRACK_CATEGORIES.map(c => `<button class="genre-chip track-${c}" onclick="setTrackCategory('${esc(num)}','${c}','${esc(t.title)}')">${TRACK_CATEGORY_LABELS[c]}</button>`).join('')}
-          ${cls ? `<button class="genre-chip" onclick="clearTrackCategory('${esc(num)}')">Clear</button>` : ''}
+          ${cls ? `<button class="genre-chip" onclick="clearTrackCategory('${esc(num)}')" title="Clear" style="width:30px;display:flex;align-items:center;justify-content:center;padding:6px;"><i class="ti ti-x"></i></button>` : ''}
         </div>` : ''}
       </div>`;
   }).join('');
